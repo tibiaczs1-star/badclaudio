@@ -114,6 +114,14 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // diretorio sem barra final ou terminando em / -> serve o index.html de dentro
+  const asDirIndex = safeJoin(__dirname, rel.replace(/\/+$/, '') + '/index.html');
+  if (asDirIndex) {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(fs.readFileSync(asDirIndex));
+    return;
+  }
+
   // Agent Room demo e demais arquivos estaticos
   const file = safeJoin(__dirname, rel);
   if (file) {
