@@ -102,6 +102,17 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // assets de sprite da base 2D (PNG)
+  if (url.pathname.startsWith('/assets/')) {
+    const rel = url.pathname.slice('/assets/'.length).replace(/\.\./g, '');
+    const file = path.join(__dirname, 'assets', rel);
+    if (file.startsWith(path.join(__dirname, 'assets')) && fs.existsSync(file) && fs.statSync(file).isFile()) {
+      res.writeHead(200, { 'Content-Type': file.endsWith('.png') ? 'image/png' : 'application/octet-stream', 'Cache-Control': 'public, max-age=86400' });
+      res.end(fs.readFileSync(file));
+      return;
+    }
+  }
+
   if (url.pathname === '/claudio.ico' || url.pathname === '/favicon.ico') {
     try {
       res.writeHead(200, { 'Content-Type': 'image/x-icon' });

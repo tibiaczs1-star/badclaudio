@@ -6,7 +6,7 @@
 <title>BadClaudio — Agent Room</title>
 <link rel="icon" href="/claudio.ico">
 <style>
-  :root { --r:#ff164f; --ok:#66ff75; --bg:#05060a; }
+  :root { --r:#ff164f; --ok:#66ff75; --bg:#0a0c10; }
   * { box-sizing:border-box; }
   html,body { height:100%; }
   body { margin:0; background:var(--bg); font:12px/1.35 Consolas,monospace; overflow:hidden; color:#e8e8ee; }
@@ -18,15 +18,15 @@
   #keysTxt { color:#9aa; }
   #world { position:absolute; inset:26px 0 64px 0; overflow:hidden; }
   canvas { display:block; width:100%; height:100%; image-rendering:pixelated; }
-  #roster { position:fixed; left:0; right:0; bottom:22px; z-index:5; display:flex; gap:6px; padding:4px 10px;
+  #roster { position:fixed; left:0; right:0; bottom:22px; z-index:5; display:flex; gap:5px; padding:4px 8px;
             overflow-x:auto; background:#0b0d13; border-top:1px solid #23262e; }
-  .chip { flex:0 0 auto; padding:3px 8px; background:#151821; border:1px solid #2a2e3a; border-radius:10px;
+  .chip { flex:0 0 auto; padding:3px 7px; background:#151821; border:1px solid #2a2e3a; border-radius:10px;
           font-size:10px; white-space:nowrap; }
   .chip.out { border-color:#ff8a5c; color:#ffbf9d; }
   #caption { position:fixed; left:0; right:0; bottom:0; z-index:5; padding:5px 10px; font-size:11px;
              background:#101218; border-top:1px solid #3a1520; color:#ffd25c; white-space:nowrap;
              overflow:hidden; text-overflow:ellipsis; }
-  #toast { position:fixed; right:8px; top:34px; max-width:70%; background:#12141a; border:1px solid var(--r);
+  #toast { position:fixed; right:8px; top:34px; max-width:75%; background:#12141a; border:1px solid var(--r);
            border-left:4px solid var(--r); padding:6px 9px; font-size:10px; opacity:0; transition:opacity .4s; z-index:9; }
 </style>
 </head>
@@ -38,18 +38,17 @@
 </div>
 <div id="world"><canvas id="cv"></canvas></div>
 <div id="roster"></div>
-<div id="caption">office live • aguarde</div>
+<div id="caption">office live</div>
 <div id="toast"></div>
 <script>
 // =====================================================================
-//  BADCLAUDIO AGENT ROOM — formato TikTok (vertical, compacto)
-//  Vida real: rotina, energia, café, xadrez, saída anunciada,
-//  requisições da bridge processadas no rack, bolhas da própria IA.
-//  Física: colisão AABB com móveis + separação entre agentes.
+//  AGENT ROOM — base de sprites propria (agents_2d + office_decor_clean)
+//  Folhas de personagem: 96x128 = 4 quadros (col) x 4 direcoes (linha)
+//  de 24x32. Direcoes: 0=baixo 1=esquerda 2=direita 3=cima.
 // =====================================================================
 const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d');
-const LW = 270, LH = 560;
+const LW = 270, LH = 500;                     // cena logica
 let scale = 1, offX = 0, offY = 0;
 function resize() {
   const w = window.innerWidth, h = window.innerHeight - 90;
@@ -59,194 +58,105 @@ function resize() {
 }
 window.addEventListener('resize', resize); resize();
 
-function px(g, x, y, w, h, col) { g.fillStyle = col; g.fillRect(x|0, y|0, Math.max(1,w|0), Math.max(1,h|0)); }
-function rnd(s) { const v = Math.sin(s * 127.1 + 311.7) * 43758.545; return v - Math.floor(v); }
+const FRAME_W = 24, FRAME_H = 32;
+const DIR = { DOWN: 0, LEFT: 1, RIGHT: 2, UP: 3 };
 
-// ---------------- sprites de pessoa (reuso do hi-fi) ----------------
-const FOLKS = [
-  { skin:'#e8b088', skinD:'#c58d64', hair:'#26241f', suit:'#2e3140', suitD:'#20222e', suitL:'#3d4155', band:'#ff164f', band2:'#ff52b8', tie:'#18dbff' },
-  { skin:'#8a5a3a', skinD:'#6d4429', hair:'#141310', suit:'#23262f', suitD:'#181a21', suitL:'#333746', band:'#18dbff', band2:'#7ee7ff', tie:'#ffcf5c' },
-  { skin:'#f0c09a', skinD:'#cf9c72', hair:'#5c3a1e', suit:'#3a2c3e', suitD:'#2a1f2d', suitL:'#4c3a52', band:'#ff52b8', band2:'#ffa3dc', tie:'#66ff75' },
-  { skin:'#e8b088', skinD:'#c58d64', hair:'#3a2f24', suit:'#25303a', suitD:'#1a222a', suitL:'#334250', band:'#66ff75', band2:'#b8ffbf', tie:'#ff8a5c' },
-  { skin:'#7a4a2c', skinD:'#5c341d', hair:'#101010', suit:'#33302a', suitD:'#242219', suitL:'#454136', band:'#ffcf5c', band2:'#ffe9ad', tie:'#5cc9ff' },
-  { skin:'#f0c09a', skinD:'#cf9c72', hair:'#6b4425', suit:'#282f42', suitD:'#1c2231', suitL:'#374056', band:'#b388ff', band2:'#d9c2ff', tie:'#ff52b8' }
-];
-const WALK_FRAMES = [
-  { legL: 3, legR: -2, armL: 2, armR: -2 }, { legL: 0, legR: 0, armL: 0, armR: 0 },
-  { legL: -2, legR: 3, armL: -2, armR: 2 }, { legL: 0, legR: 0, armL: 0, armR: 0 }
-];
-function makeSprite(w, h, draw) {
-  const c = document.createElement('canvas'); c.width = w; c.height = h;
-  const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
-  draw(g, w, h); return c;
+// ---------------- carregamento ----------------
+const IMG = {};
+function load(name) {
+  const i = new Image();
+  i.src = 'assets/' + name;
+  IMG[name] = i;
+  return i;
 }
-function outline(g, w, h, col) {
-  const d = g.getImageData(0, 0, w, h);
-  const a = (x, y) => x >= 0 && y >= 0 && x < w && y < h ? d.data[(y * w + x) * 4 + 3] : 0;
-  g.fillStyle = col;
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++)
-    if (a(x, y) === 0 && (a(x-1,y) || a(x+1,y) || a(x,y-1) || a(x,y+1))) g.fillRect(x, y, 1, 1);
-}
-function makeHuman(pal, frame, sitting) {
-  return makeSprite(26, 50, (g, w, h) => {
-    const F = sitting ? { legL:-4, legR:4, armL:1, armR:-1 } : WALK_FRAMES[frame % 4];
-    px(g, 8+F.legL, 36, 4, 11, pal.suitD); px(g, 9+F.legL, 36, 2, 11, pal.suit);
-    px(g, 14+F.legR, 36, 4, 11, pal.suitD); px(g, 15+F.legR, 36, 2, 11, pal.suit);
-    px(g, 7+F.legL, 46, 5, 3, '#14141c'); px(g, 13+F.legR, 46, 5, 3, '#14141c');
-    px(g, 6, 20, 14, 17, pal.suit);
-    px(g, 6, 20, 14, 2, pal.suitL); px(g, 6, 35, 14, 2, pal.suitD);
-    px(g, 12, 22, 2, 13, pal.tie); px(g, 11, 22, 4, 2, '#f4f4ee');
-    px(g, 3, 22+F.armL, 4, 12, pal.suit); px(g, 3, 32+F.armL, 4, 3, pal.skin);
-    px(g, 19, 22+F.armR, 4, 12, pal.suitD); px(g, 19, 32+F.armR, 4, 3, pal.skinD);
-    px(g, 7, 8, 12, 12, pal.skin); px(g, 7, 17, 12, 3, pal.skinD);
-    px(g, 7, 8, 12, 3, pal.hair); px(g, 6, 7, 14, 4, pal.hair);
-    px(g, 6, 10, 2, 6, pal.hair); px(g, 18, 10, 2, 6, pal.hair);
-    px(g, 10, 13, 2, 2, '#fff'); px(g, 14, 13, 2, 2, '#fff');
-    px(g, 10, 13, 1, 2, '#1a1c24'); px(g, 14, 13, 1, 2, '#1a1c24');
-    px(g, 12, 16, 1, 1, pal.skinD); px(g, 11, 17, 4, 1, '#b06a5a');
-    px(g, 6, 9, 14, 3, pal.band); px(g, 5, 10, 2, 2, pal.band);
-    px(g, 19, 10, 4, 2, pal.band); px(g, 22, 11, 2, 3, pal.band2);
-    outline(g, w, h, '#08090c');
-  });
-}
-const HUMAN = FOLKS.map(p => ({
-  frames: [0,1,2,3].map(f => makeHuman(p, f, false)),
-  idle: makeHuman(p, 1, false),
-  sit: makeHuman(p, 0, true)
-}));
-const SPR = {
-  desk: makeSprite(66, 30, (g,w,h) => {
-    px(g, 0, 6, 66, 7, '#5b3a1e'); px(g, 0, 6, 66, 2, '#8a5a33'); px(g, 0, 12, 66, 1, '#3a2312');
-    px(g, 3, 13, 4, 17, '#22262f'); px(g, 59, 13, 4, 17, '#22262f');
-    px(g, 10, 16, 46, 9, '#1a1d26'); px(g, 12, 18, 42, 3, '#252a36');
-    outline(g, w, h, '#0a0c10');
-  }),
-  monitor: makeSprite(22, 18, (g,w,h) => {
-    px(g, 2, 0, 18, 13, '#1b1f29'); px(g, 3, 1, 16, 11, '#0a1610');
-    px(g, 9, 13, 4, 3, '#22262f'); px(g, 6, 16, 10, 2, '#2c303c');
-    outline(g, w, h, '#08090c');
-  }),
-  rack: makeSprite(34, 74, (g,w,h) => {
-    px(g, 0, 0, 34, 74, '#1a1d26'); px(g, 2, 2, 30, 70, '#2c303c');
-    for (let u = 0; u < 5; u++) { const uy = 5 + u * 13; px(g, 4, uy, 26, 10, '#181a22'); px(g, 4, uy, 26, 2, '#3a4150'); }
-    outline(g, w, h, '#08090c');
-  }),
-  sofa: makeSprite(64, 26, (g,w,h) => {
-    px(g, 0, 6, 64, 12, '#5e1628'); px(g, 3, 3, 58, 9, '#7c1f3a');
-    px(g, 5, 5, 24, 5, '#94304f'); px(g, 33, 5, 24, 5, '#94304f');
-    px(g, 0, 0, 7, 22, '#7c1f3a'); px(g, 57, 0, 7, 22, '#7c1f3a');
-    px(g, 0, 18, 64, 3, '#4c1123');
-    outline(g, w, h, '#08090c');
-  }),
-  plant: makeSprite(22, 36, (g,w,h) => {
-    px(g, 5, 25, 12, 10, '#8a4a2a'); px(g, 5, 25, 12, 2, '#a5713f');
-    const leaf = (x, y, len, col, colD) => { for (let i = 0; i < len; i++) px(g, x + (i%2===0?0:1), y - i, 3, 2, i%3===0?colD:col); };
-    leaf(7, 25, 12, '#3fae52', '#1f6b2c'); leaf(10, 25, 17, '#2f8f3f', '#1f6b2c');
-    leaf(13, 25, 11, '#3fae52', '#1f6b2c');
-    outline(g, w, h, '#08090c');
-  }),
-  coffee: makeSprite(22, 30, (g,w,h) => {
-    px(g, 1, 0, 20, 24, '#2c303c'); px(g, 3, 2, 16, 8, '#39404f');
-    px(g, 4, 11, 13, 4, '#181a22'); px(g, 15, 9, 3, 2, '#66ff75');
-    px(g, 3, 20, 16, 6, '#22262f'); px(g, 7, 15, 8, 4, '#cfe8ff');
-    outline(g, w, h, '#08090c');
-  }),
-  chess: makeSprite(84, 84, (g,w,h) => {
-    px(g, 0, 0, 84, 84, '#452b16'); px(g, 2, 2, 80, 80, '#6b4425');
-    for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++)
-      px(g, 2 + f*10, 2 + r*10, 10, 10, (r+f)%2 ? '#c8c8bd' : '#4c4a42');
-    outline(g, w, h, '#0a0c10');
-  })
+const SPRITES = {
+  dev_station: 'office_dev_station.png',
+  rack: 'office_server_rack.png',
+  sofa: 'office_leather_sofa.png',
+  cooler: 'office_water_cooler.png',
+  plant: 'office_plant_ficus.png',
+  chair: 'office_chair_executive.png',
+  floor: 'floor_wood_noble.png',
+  window: 'wall_north_window.png',
+  wall: 'wall_texture_limezu.png'
+};
+Object.values(SPRITES).forEach(load);
+const SHEETS = {
+  Diretor:   load('director_executive.png'),
+  'Dev Sr':  load('godot_senior_dev.png'),
+  Pesquisa:  load('ai_researcher.png'),
+  QA:        load('qa_auditor.png'),
+  Infra:     load('infra_devops.png'),
+  Arte:      load('concept_artist.png')
 };
 
-// ===================== física: colisão =====================
-// AABBs dos móveis (x, y, w, h)
-const OBSTACLES = [];
-function addObs(x, y, w, h) { OBSTACLES.push({ x, y, w, h }); }
-const LAYOUT = {
-  door:  { x: 118, y: 6,  w: 34,  h: 10 },   // saída no topo
-  rack:  { x: 10,  y: 34, w: 34,  h: 74 },
-  desks: [ { x: 60,  y: 44,  w: 66, h: 30 },
-           { x: 146, y: 44,  w: 66, h: 30 },
-           { x: 60,  y: 96,  w: 66, h: 30 },
-           { x: 146, y: 96,  w: 66, h: 30 },
-           { x: 60,  y: 148, w: 66, h: 30 },
-           { x: 146, y: 148, w: 66, h: 30 } ],
-  coffee: { x: 226, y: 120, w: 22, h: 30 },
-  sofa:   { x: 30,  y: 230, w: 64, h: 26 },
-  chess:  { x: 110, y: 300, w: 84, h: 84 },
-  plant1: { x: 222, y: 210, w: 22, h: 36 },
-  plant2: { x: 14,  y: 330, w: 22, h: 36 }
-};
-addObs(LAYOUT.rack.x, LAYOUT.rack.y, LAYOUT.rack.w, LAYOUT.rack.h);
-LAYOUT.desks.forEach(d => addObs(d.x, d.y, d.w, d.h));
-addObs(LAYOUT.coffee.x, LAYOUT.coffee.y, LAYOUT.coffee.w, LAYOUT.coffee.h);
-addObs(LAYOUT.sofa.x, LAYOUT.sofa.y, LAYOUT.sofa.w, LAYOUT.sofa.h);
-addObs(LAYOUT.chess.x, LAYOUT.chess.y, LAYOUT.chess.w, LAYOUT.chess.h);
-addObs(LAYOUT.plant1.x, LAYOUT.plant1.y, LAYOUT.plant1.w, LAYOUT.plant1.h);
-addObs(LAYOUT.plant2.x, LAYOUT.plant2.y, LAYOUT.plant2.w, LAYOUT.plant2.h);
+// ---------------- layout ----------------
+// 3 colunas de estacoes encostadas na parede + area de caminhada livre
+const ST_W = 78, ST_H = 60;
+const DESKS = [];
+const COLS = [6, 96, 186];
+[[6, 96, 186], [16, 106, 196]].forEach((rowX, r) => {
+  rowX.forEach((x, c) => DESKS.push({ x, y: 40 + r * 58, w: ST_W, h: ST_H }));
+});
+const RACK = { x: 220, y: 168, w: 54, h: 94 };
+const SOFA = { x: 20, y: 270, w: 66, h: 44 };
+const COOLER = { x: 232, y: 274, w: 26, h: 40 };
+const PLANT1 = { x: 6, y: 190, w: 20, h: 34 };
+const PLANT2 = { x: 244, y: 330, w: 20, h: 34 };
+const CHESS = { x: 95, y: 320, w: 84, h: 84 };
+const DOOR = { x: 118, y: 2, w: 34, h: 22 };
 
-const AGENT_R = 11;
+// colisao (AABBs)
+const OBSTACLES = [RACK, SOFA, COOLER, PLANT1, PLANT2, CHESS,
+  ...DESKS.map(d => ({ x: d.x, y: d.y, w: d.w, h: d.h }))];
+const AR = 7;
 function collide(a) {
-  // empurra o agente para fora de cada AABB (eixo de menor penetração)
   for (const o of OBSTACLES) {
-    const cx = Math.max(o.x, Math.min(a.px, o.x + o.w));
-    const cy = Math.max(o.y, Math.min(a.py, o.y + o.h));
-    const dx = a.px - cx, dy = a.py - cy;
-    const d2 = dx * dx + dy * dy;
-    if (d2 < AGENT_R * AGENT_R) {
-      if (d2 > 0.001) {
-        const d = Math.sqrt(d2);
-        a.px = cx + dx / d * AGENT_R;
-        a.py = cy + dy / d * AGENT_R;
-      } else {
-        // dentro do box: sai pelo eixo mais curto
-        const left = a.px - o.x, right = o.x + o.w - a.px;
-        const top = a.py - o.y, bottom = o.y + o.h - a.py;
-        const m = Math.min(left, right, top, bottom);
-        if (m === left) a.px = o.x - AGENT_R;
-        else if (m === right) a.px = o.x + o.w + AGENT_R;
-        else if (m === top) a.py = o.y - AGENT_R;
-        else a.py = o.y + o.h + AGENT_R;
+    const nx = Math.max(o.x, Math.min(a.px, o.x + o.w));
+    const ny = Math.max(o.y, Math.min(a.py, o.y + o.h));
+    const dx = a.px - nx, dy = a.py - ny, d2 = dx*dx + dy*dy;
+    if (d2 < AR*AR) {
+      if (d2 > 0.01) { const d = Math.sqrt(d2); a.px = nx + dx/d*AR; a.py = ny + dy/d*AR; }
+      else {
+        const l = a.px - o.x, r = o.x + o.w - a.px, t = a.py - o.y, b = o.y + o.h - a.py;
+        const m = Math.min(l, r, t, b);
+        if (m === l) a.px = o.x - AR; else if (m === r) a.px = o.x + o.w + AR;
+        else if (m === t) a.py = o.y - AR; else a.py = o.y + o.h + AR;
       }
     }
   }
-  a.px = Math.max(AGENT_R, Math.min(LW - AGENT_R, a.px));
-  a.py = Math.max(AGENT_R + 14, Math.min(LH - AGENT_R, a.py));
+  a.px = Math.max(10, Math.min(LW - 10, a.px));
+  a.py = Math.max(26, Math.min(LH - 8, a.py));
 }
-function separate(agents) {
-  for (let i = 0; i < agents.length; i++) for (let j = i + 1; j < agents.length; j++) {
-    const A = agents[i], B = agents[j];
-    if (A.state === 'out' || B.state === 'out') continue;
-    const dx = B.px - A.px, dy = B.py - A.py;
-    const d = Math.hypot(dx, dy);
-    if (d > 0.01 && d < AGENT_R * 2) {
-      const push = (AGENT_R * 2 - d) / 2;
-      A.px -= dx / d * push; A.py -= dy / d * push;
-      B.px += dx / d * push; B.py += dy / d * push;
+function separate(list) {
+  for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+    const A = list[i], B = list[j];
+    const dx = B.px - A.px, dy = B.py - A.py, d = Math.hypot(dx, dy);
+    if (d > 0.01 && d < AR * 2) {
+      const p = (AR * 2 - d) / 2;
+      A.px -= dx/d*p; A.py -= dy/d*p; B.px += dx/d*p; B.py += dy/d*p;
     }
   }
 }
 
-// ===================== bridge: status + IA =====================
+// ---------------- ponte ----------------
 let room = { online:false, keys:0, models:0, requests:0, lastServed:null };
-let lastReq = -1, taskQueue = [], chatterQueue = [];
-function toast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.style.opacity = 1;
-  clearTimeout(toast._t); toast._t = setTimeout(() => t.style.opacity = 0, 4000);
+let lastReq = -1, taskQueue = [];
+function toast(m) {
+  const el = document.getElementById('toast');
+  el.textContent = m; el.style.opacity = 1;
+  clearTimeout(toast._t); toast._t = setTimeout(() => el.style.opacity = 0, 4000);
 }
-function caption(txt) { document.getElementById('caption').textContent = txt; }
+function caption(m) { document.getElementById('caption').textContent = m; }
 async function poll() {
-  try { const r = await fetch('/api/room-status'); room = await r.json(); }
+  try { room = await (await fetch('/api/room-status')).json(); }
   catch { room = { online:false, keys:0, models:0, requests:0, lastServed:null }; }
-  const dot = document.getElementById('dot');
-  dot.className = 'dot' + (room.online ? ' on' : '');
+  document.getElementById('dot').className = 'dot' + (room.online ? ' on' : '');
   document.getElementById('statusTxt').textContent = room.online ? 'bridge ONLINE' : 'bridge offline';
   document.getElementById('keysTxt').textContent = room.online ? room.keys + ' canais • ' + (room.requests||0) + ' reqs' : '';
   if (lastReq >= 0 && room.requests > lastReq) {
     for (let k = 0; k < Math.min(room.requests - lastReq, 2); k++) taskQueue.push({ info: room.lastServed });
-    toast('⚡ requisição passou na bridge → agente acionado');
+    toast('⚡ requisição na bridge');
   }
   lastReq = room.requests || 0;
   if (room.online && !poll.was) toast('🥹 ponte ligada: ' + room.keys + ' canais');
@@ -254,315 +164,332 @@ async function poll() {
 }
 poll.was = false; poll(); setInterval(poll, 4000);
 
-// bolhas inteligentes: pede linha curta à IA da bridge (fallback local)
-const FALLBACK_CHAT = [
-  'subiu o build, tranquilo.', 'energia baixa, preciso de café.',
-  'refiz o teste, agora passa.', 'essa cascade aí é boa demais.',
-  'quem tá no xadrez? entro depois.', 'deixa eu revisar esse diff...',
-  'dica: automatize o repetitivo.', 'reqs subindo, bom sinal.'
-];
 let lastChatter = 0;
 async function agentChatter(agent, context) {
   const now = Date.now();
-  if (now - lastChatter < 12000) return null;   // economiza tokens
+  if (now - lastChatter < 12000) return null;
   lastChatter = now;
   try {
     const r = await fetch('/api/agent-chatter', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ agent: agent.name, context }),
-      signal: AbortSignal.timeout(7000)
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ agent, context }), signal: AbortSignal.timeout(7000)
     });
     if (!r.ok) return null;
-    const d = await r.json();
-    return d.line || null;
+    return (await r.json()).line || null;
   } catch { return null; }
 }
 
-// ===================== vida dos agentes =====================
-const STATES = {
-  WORK: '💻', COFFEE: '☕', REST: '🛋', CHESS: '♟', PROCESS: '🌉', OUT: '🚪', WALK: '🚶'
-};
-const OUT_DESTINATIONS = [
-  'deploy no canal de produção', 'manutenção do Canal #7', 'buscar mais tokens',
-  'reunião com o provedor', 'inspecionar a cascata', 'resolver latência no roteador',
-  'backup do gabinete', 'auditar os logs da bridge'
-];
-function mkAgent(name, idx, desk) {
-  return { name, idx, desk,
-    px: desk.x + desk.w/2, py: desk.y + desk.h + 16,
-    tx: 0, ty: 0, state: 'WORK', stateT: 0, f: 0,
-    energy: 60 + Math.random() * 40, mood: 70,
-    lines: 0, bubble: null, bubbleUntil: 0,
-    next: 4000 + Math.random() * 8000, outDest: null, outUntil: 0,
-    spotlight: 0 };
-}
-const AGENTS = [
-  mkAgent('Diretor', 0, LAYOUT.desks[0]),
-  mkAgent('Dev Sr', 1, LAYOUT.desks[1]),
-  mkAgent('Pesquisa', 2, LAYOUT.desks[2]),
-  mkAgent('QA', 3, LAYOUT.desks[3]),
-  mkAgent('Infra', 4, LAYOUT.desks[4]),
-  mkAgent('Arte', 5, LAYOUT.desks[5])
-];
-function say(a, text, dur) {
-  a.bubble = text; a.bubbleUntil = performance.now() + (dur || 4200);
-}
-function goTo(a, x, y, state) { a.tx = x; a.ty = y; a.state = state; a.stateT = 0; }
+// ---------------- agentes ----------------
+const DESK_OF = {};
+const AGENTS = ['Diretor', 'Dev Sr', 'Pesquisa', 'QA', 'Infra', 'Arte'].map((name, i) => {
+  const d = DESKS[i];
+  const a = {
+    name, idx: i, desk: d,
+    px: d.x + d.w/2, py: d.y + d.h + 12,
+    tx: 0, ty: 0, dir: DIR.DOWN, frame: 0, animT: 0, f: 0,
+    state: 'WORK', stateT: 0, energy: 55 + Math.random()*45, mood: 70,
+    bubble: null, bubbleUntil: 0, next: 3000 + Math.random()*9000,
+    outDest: null, outUntil: 0, highlight: 0
+  };
+  DESK_OF[name] = d;
+  return a;
+});
+const byName = n => AGENTS.find(a => a.name === n);
 
-function agentBrain(a, t, dt) {
-  a.stateT += dt;
+const OUT_DESTS = [
+  'deploy em produção', 'manutenção do Canal #7', 'buscar tokens extras',
+  'reunião com o provedor', 'auditar a cascata', 'resolver latência do roteador',
+  'backup do gabinete', 'revisar logs da bridge'
+];
+function say(a, text, dur) { a.bubble = text; a.bubbleUntil = performance.now() + (dur || 4000); }
+function goTo(a, x, y, state) { a.tx = x; a.ty = y; a.state = state; a.stateT = 0; }
+function arrived(a) { return Math.hypot(a.tx - a.px, a.ty - a.py) < 2.5; }
+function backToDesk(a) { goTo(a, a.desk.x + a.desk.w/2, a.desk.y + a.desk.h + 12, 'TO_WORK'); }
+
+let chessPlayers = [];
+function brain(a, t) {
+  a.stateT += 16;
   switch (a.state) {
+    case 'TO_WORK':
+      if (arrived(a)) { a.state = 'WORK'; }
+      break;
     case 'WORK':
-      a.energy -= dt * 1.1; a.lines += dt * 0.4;
-      if (a.energy < 30 && Math.random() < 0.02) {
-        say(a, 'pedindo café ☕ (qualidade de vida)');
-        agentChatter(a, 'pediu uma pausa de café, responda em 6 palavras o que quer');
-        goTo(a, LAYOUT.coffee.x - 16, LAYOUT.coffee.y + 40, 'TO_COFFEE');
-        caption('@' + a.name + ' pediu café — energia ' + a.energy.toFixed(0) + '%');
-      } else if (a.next < t && Math.random() < 0.25) {
-        // sai para tarefa externa: SEMPRE anuncia destino
-        a.outDest = OUT_DESTINATIONS[(Math.random() * OUT_DESTINATIONS.length) | 0];
-        say(a, '🚪 saí: ' + a.outDest, 5000);
-        caption('🚪 @' + a.name + ' saiu → ' + a.outDest + ' (via bridge)');
-        goTo(a, LAYOUT.door.x + LAYOUT.door.w/2, LAYOUT.door.y + 6, 'TO_DOOR');
-      } else if (a.next < t) {
+      a.energy -= 0.018;
+      if (a.energy < 28) {
+        say(a, '☕ energia baixa, indo buscar café');
+        agentChatter(a.name, 'pediu uma pausa de café').then(l => l && say(a, l, 5000));
+        goTo(a, COOLER.x + COOLER.w/2, COOLER.y + COOLER.h + 14, 'TO_COFFEE');
+        caption('☕ @' + a.name + ' pediu café (energia ' + a.energy.toFixed(0) + '%)');
+      } else if (t > a.next) {
+        a.next = t + 9000 + Math.random()*10000;
         const r = Math.random();
-        if (r < 0.4) { goTo(a, LAYOUT.chess.x - 18, LAYOUT.chess.y + 92, 'TO_CHESS'); say(a, '♟ pausa de xadrez!'); }
-        else { goTo(a, LAYOUT.sofa.x + 30, LAYOUT.sofa.y + 34, 'TO_REST'); say(a, '🛋 descanso 5min'); }
-        agentChatter(a, 'foi descansar, responda em 6 palavras');
+        if (r < 0.35) {
+          a.outDest = OUT_DESTS[(Math.random()*OUT_DESTS.length)|0];
+          say(a, '🚪 saí: ' + a.outDest, 5000);
+          caption('🚪 @' + a.name + ' saiu → ' + a.outDest + ' (via bridge)');
+          goTo(a, DOOR.x + DOOR.w/2, DOOR.y + 26, 'TO_DOOR');
+        } else if (r < 0.65) {
+          say(a, '♟ pausa de xadrez');
+          goTo(a, CHESS.x + (a.name.length % 2 ? 6 : CHESS.w - 6), CHESS.y + CHESS.h + 14, 'TO_CHESS');
+        } else {
+          say(a, '🛋 descanso rápido');
+          goTo(a, SOFA.x + SOFA.w/2, SOFA.y + SOFA.h + 14, 'TO_REST');
+          agentChatter(a.name, 'foi descansar no sofa').then(l => l && say(a, l, 5000));
+        }
       }
       break;
-    case 'TO_COFFEE': if (arrived(a)) { a.state = 'COFFEE'; a.stateT = 0; say(a, '☕ recarregando...'); } break;
+    case 'TO_COFFEE': if (arrived(a)) { a.state = 'COFFEE'; a.stateT = 0; } break;
     case 'COFFEE':
-      if (a.stateT > 2600) { a.energy = Math.min(100, a.energy + 30); a.state = 'WORK'; say(a, '☕ caffeine++ → bora'); }
+      if (a.stateT > 2600) { a.energy = Math.min(100, a.energy + 35); say(a, '☕ recarregado!'); backToDesk(a); }
       break;
     case 'TO_REST': if (arrived(a)) { a.state = 'REST'; a.stateT = 0; } break;
     case 'REST':
-      a.mood = Math.min(100, a.mood + dt * 2);
-      if (a.stateT > 7000) backToWork(a);
+      a.mood = Math.min(100, a.mood + 0.06);
+      if (a.stateT > 7000) backToDesk(a);
       break;
-    case 'TO_CHESS': if (arrived(a)) { a.state = 'CHESS'; a.stateT = 0; chessPlayers.push(a); } break;
+    case 'TO_CHESS':
+      if (arrived(a)) { a.state = 'CHESS'; a.stateT = 0; if (!chessPlayers.includes(a)) chessPlayers.push(a); }
+      break;
     case 'CHESS':
-      a.mood = Math.min(100, a.mood + dt * 3);
-      if (a.stateT > 9000) { chessPlayers = chessPlayers.filter(p => p !== a); backToWork(a); }
+      a.mood = Math.min(100, a.mood + 0.08);
+      if (a.stateT > 10000) { chessPlayers = chessPlayers.filter(p => p !== a); backToDesk(a); }
       break;
     case 'PROCESS':
-      if (a.stateT > 3200) { say(a, '✔ req processada'); backToWork(a); }
+      if (a.stateT > 3200) { say(a, '✔ requisição processada'); backToDesk(a); }
       break;
-    case 'TO_DOOR': if (arrived(a)) { a.state = 'OUT'; a.outUntil = t + 6000 + Math.random() * 7000; } break;
+    case 'TO_DOOR': if (arrived(a)) { a.state = 'OUT'; a.outUntil = t + 6000 + Math.random()*8000; } break;
     case 'OUT':
       if (t > a.outUntil) {
-        a.state = 'WORK'; a.px = LAYOUT.door.x + LAYOUT.door.w/2; a.py = LAYOUT.door.y + 6;
-        goTo(a, a.desk.x + a.desk.w/2, a.desk.y + a.desk.h + 16, 'WORK');
+        a.px = DOOR.x + DOOR.w/2; a.py = DOOR.y + 26;
         say(a, '↩ voltei: ' + a.outDest + ' concluído', 4500);
         caption('↩ @' + a.name + ' voltou de: ' + a.outDest);
         a.outDest = null;
+        backToDesk(a);
       }
       break;
   }
-  a.next = Math.max(a.next, t + 9000);
 }
-function arrived(a) {
-  return Math.hypot(a.tx - a.px, a.ty - a.py) < 3;
-}
-function backToWork(a) {
-  goTo(a, a.desk.x + a.desk.w/2, a.desk.y + a.desk.h + 16, 'WORK');
-}
-// fila de tarefas da bridge → agente livre vai ao rack processar
-let chessPlayers = [];
 function dispatchTasks() {
   while (taskQueue.length) {
     const task = taskQueue.shift();
     const free = AGENTS.filter(a => a.state === 'WORK');
-    if (!free.length) { taskQueue.unshift(task); break; }
-    const a = free[(Math.random() * free.length) | 0];
+    if (!free.length) { taskQueue.unshift(task); return; }
+    const a = free[(Math.random()*free.length)|0];
     const info = task.info || 'requisição';
     say(a, '🌉 processando: ' + info, 4600);
     caption('🌉 @' + a.name + ' processou ' + info);
-    goTo(a, LAYOUT.rack.x + LAYOUT.rack.w + 18, LAYOUT.rack.y + 40, 'PROCESS');
+    goTo(a, RACK.x + RACK.w + 16, RACK.y + 46, 'PROCESS');
   }
 }
 
-// xadrez ao vivo (2 jogadores sentados mexem peças)
-const CHESS_PIECES = [];
+// ---------------- xadrez ----------------
+const PIECES = [];
 (function () {
-  const layout = ['t','h','b','q','k','b','h','t'];
+  const back = ['t','h','b','q','k','b','h','t'];
   for (let i = 0; i < 8; i++) {
-    CHESS_PIECES.push({ c:0, t:'p', x:i, y:1 }, { c:1, t:'p', x:i, y:6 });
-    CHESS_PIECES.push({ c:0, t:layout[i], x:i, y:0 }, { c:1, t:layout[i], x:i, y:7 });
+    PIECES.push({ c:0, t:'p', x:i, y:1 }, { c:1, t:'p', x:i, y:6 });
+    PIECES.push({ c:0, t:back[i], x:i, y:0 }, { c:1, t:back[i], x:i, y:7 });
   }
 })();
 let chessAnim = null, chessLast = 0;
 function chessStep(t) {
-  if (t - chessLast < 5000 || chessPlayers.length < 1) return;
+  if (t - chessLast < 4800 || !chessPlayers.length) return;
   chessLast = t;
-  const side = (CHESS_PIECES.filter(p => p.c === 0).length) > (CHESS_PIECES.filter(p => p.c === 1).length) ? 1 : 0;
-  const mine = CHESS_PIECES.filter(p => p.c === side);
+  const side = Math.random() < 0.5 ? 0 : 1;
+  const mine = PIECES.filter(p => p.c === side);
   if (!mine.length) return;
-  const p = mine[(Math.random() * mine.length) | 0];
+  const p = mine[(Math.random()*mine.length)|0];
   const nx = Math.max(0, Math.min(7, p.x + [-1,0,1][(Math.random()*3)|0]));
   const ny = Math.max(0, Math.min(7, p.y + (side === 0 ? 1 : -1)));
-  const v = CHESS_PIECES.findIndex(o => o !== p && o.x === nx && o.y === ny);
-  if (v >= 0) CHESS_PIECES.splice(v, 1);
+  const v = PIECES.findIndex(o => o !== p && o.x === nx && o.y === ny);
+  if (v >= 0) PIECES.splice(v, 1);
   chessAnim = { p, fx: p.x, fy: p.y, start: t };
   p.x = nx; p.y = ny;
-  if (chessPlayers.length && Math.random() < 0.4)
-    say(chessPlayers[(Math.random()*chessPlayers.length)|0], '♟ xeque!');
+  if (Math.random() < 0.4) say(chessPlayers[(Math.random()*chessPlayers.length)|0], '♟ xeque!');
 }
 
-// ===================== desenho =====================
-function drawRoom(t) {
-  // parede
-  const grd = ctx.createLinearGradient(0, 0, 0, 200);
-  grd.addColorStop(0, '#1b1f2a'); grd.addColorStop(1, '#262b38');
-  ctx.fillStyle = grd; ctx.fillRect(0, 0, LW, 200);
-  px(ctx, 0, 8, LW, 3, room.online ? '#ff164f' : '#3a1520');
-  if (room.online) { ctx.globalAlpha = .25; px(ctx, 0, 0, LW, 14, '#ff164f'); ctx.globalAlpha = 1; }
-  // porta de saída com placa
-  px(ctx, LAYOUT.door.x - 4, 2, LAYOUT.door.w + 8, 14, '#54331b');
-  px(ctx, LAYOUT.door.x, 4, LAYOUT.door.w, 10, '#6b4425');
-  px(ctx, LAYOUT.door.x + 24, 8, 3, 3, '#ffcf5c');
-  px(ctx, LAYOUT.door.x + 2, 5, 8, 5, '#1f2f5e');
-  ctx.font = 'bold 7px Consolas'; ctx.fillStyle = '#ffd25c'; ctx.textAlign = 'center';
-  ctx.fillText('SAÍDA →', LAYOUT.door.x + LAYOUT.door.w/2, 20);
-  ctx.textAlign = 'left';
-  // piso
-  for (let y = 200; y < LH; y += 12) {
-    const depth = (y - 200) / (LH - 200);
-    const r = Math.round(63 + 43 * depth), g2 = Math.round(47 + 23 * depth), b = Math.round(32 + 15 * depth);
-    px(ctx, 0, y, LW, 12, `rgb(${r},${g2},${b})`);
-    const off = ((y / 12) % 2) * 42;
-    for (let x = off; x < LW; x += 84) px(ctx, x, y, 2, 12, '#3a2818');
-  }
-  // luminárias e poças de luz
-  [90, 190].forEach(lx => {
-    px(ctx, lx - 14, 4, 28, 3, '#39404f');
-    ctx.globalAlpha = .10;
-    const lg = ctx.createRadialGradient(lx, 180, 8, lx, 180, 120);
-    lg.addColorStop(0, '#fff2d8'); lg.addColorStop(1, 'transparent');
-    ctx.fillStyle = lg; ctx.beginPath(); ctx.ellipse(lx, 190, 100, 60, 0, 0, Math.PI*2); ctx.fill();
-    ctx.globalAlpha = 1;
-  });
+// ---------------- desenho: cenario ----------------
+function tile(img, tw, th, y0) {
+  if (!img.complete || !img.naturalWidth) return false;
+  for (let y = y0; y < LH; y += th)
+    for (let x = 0; x < LW; x += tw)
+      ctx.drawImage(img, x, y, tw, th);
+  return true;
 }
-function drawFurniture(t) {
-  ctx.drawImage(SPR.rack, LAYOUT.rack.x, LAYOUT.rack.y);
+function drawRoom(t) {
+  ctx.fillStyle = '#12141c'; ctx.fillRect(0, 0, LW, LH);
+  // piso de madeira (64x64)
+  tile(IMG[SPRITES.floor], 64, 64, 92);
+  // parede: textura + janelas
+  const wall = IMG[SPRITES.wall];
+  if (wall.complete && wall.naturalWidth) {
+    for (let x = 0; x < LW; x += 64) ctx.drawImage(wall, x, 0, 64, 92);
+  } else { ctx.fillStyle = '#2b3340'; ctx.fillRect(0, 0, LW, 92); }
+  const win = IMG[SPRITES.window];
+  if (win.complete && win.naturalWidth) {
+    for (let x = 14; x < LW - 80; x += 104) ctx.drawImage(win, x, 8, 64, 32);
+  }
+  // faixa neon de status
+  ctx.fillStyle = room.online ? '#ff164f' : '#3a1520';
+  ctx.fillRect(0, 88, LW, 2);
+  // porta
+  ctx.fillStyle = '#3a2415'; ctx.fillRect(DOOR.x - 3, 2, DOOR.w + 6, 24);
+  ctx.fillStyle = '#57351d'; ctx.fillRect(DOOR.x, 5, DOOR.w, 20);
+  ctx.fillStyle = '#ffcf5c'; ctx.fillRect(DOOR.x + DOOR.w - 5, 14, 2, 2);
+  ctx.fillStyle = '#ffd25c'; ctx.font = 'bold 7px Consolas'; ctx.textAlign = 'center';
+  ctx.fillText('SAÍDA →', DOOR.x + DOOR.w/2, 34);
+  ctx.textAlign = 'left';
+}
+function drawMob() {
+  const rack = IMG[SPRITES.rack];
+  if (rack.complete && rack.naturalWidth) ctx.drawImage(rack, RACK.x, RACK.y, RACK.w, RACK.h);
   if (room.online) for (let u = 0; u < 5; u++) {
-    const uy = LAYOUT.rack.y + 5 + u * 13;
-    const blink = (t * 0.004 + u * 1.7) % 3 > 0.6;
-    px(ctx, LAYOUT.rack.x + 8, uy + 4, 2, 2, blink ? '#66ff75' : '#2f4');
-    px(ctx, LAYOUT.rack.x + 12, uy + 4, 2, 2, ((t*0.01+u)%5)>2.5 ? '#66ff75' : '#233');
+    const y = RACK.y + 14 + u * 14;
+    ctx.fillStyle = ((performance.now()*0.004 + u) % 3) > 0.6 ? '#66ff75' : '#2f7a43';
+    ctx.fillRect(RACK.x + 8, y, 2, 2);
+    ctx.fillRect(RACK.x + 13, y, 2, 2);
   }
-  LAYOUT.desks.forEach((d, i) => {
-    ctx.drawImage(SPR.desk, d.x, d.y);
-    ctx.drawImage(SPR.monitor, d.x + 20, d.y - 14);
-    if (room.online) for (let l = 0; l < 3; l++) {
-      const ly = d.y - 12 + ((t * 0.03 + l * 4 + i * 5) % 11 | 0);
-      px(ctx, d.x + 22, ly, 4 + (rnd(i + l + ((t*0.001)|0)) * 10 | 0), 1, l === 0 ? '#7dffa0' : '#3fae52');
-    }
+  const sofa = IMG[SPRITES.sofa];
+  if (sofa.complete && sofa.naturalWidth) ctx.drawImage(sofa, SOFA.x, SOFA.y, SOFA.w, SOFA.h);
+  const cooler = IMG[SPRITES.cooler];
+  if (cooler.complete && cooler.naturalWidth) ctx.drawImage(cooler, COOLER.x, COOLER.y, COOLER.w, COOLER.h);
+  const plant = IMG[SPRITES.plant];
+  if (plant.complete && plant.naturalWidth) {
+    ctx.drawImage(plant, PLANT1.x, PLANT1.y, PLANT1.w, PLANT1.h);
+    ctx.drawImage(plant, PLANT2.x, PLANT2.y, PLANT2.w, PLANT2.h);
+  }
+  // estacoes + quem esta sentado
+  const st = IMG[SPRITES.dev_station];
+  DESKS.forEach((d, i) => {
     const a = AGENTS[i];
-    if (a && a.state === 'WORK' || a.state === 'COFFEE') ctx.drawImage(HUMAN[i].sit, d.x + 18, d.y - 12);
-    else ctx.drawImage(SPR.desk, d.x, d.y); // mesa vazia
+    const seated = a && (a.state === 'WORK' || a.state === 'TO_WORK');
+    if (seated) {
+      drawChar(a, d.x + d.w/2 - FRAME_W/2, d.y + 8, DIR.DOWN, 0, 1);
+      if (st.complete && st.naturalWidth) ctx.drawImage(st, d.x, d.y, d.w, d.h);
+    } else {
+      if (st.complete && st.naturalWidth) ctx.drawImage(st, d.x, d.y, d.w, d.h);
+      const ch = IMG[SPRITES.chair];
+      if (ch.complete && ch.naturalWidth) ctx.drawImage(ch, d.x + d.w/2 - 9, d.y + d.h - 12, 18, 22);
+    }
   });
-  ctx.drawImage(SPR.coffee, LAYOUT.coffee.x, LAYOUT.coffee.y);
-  if (room.online) for (let s = 0; s < 3; s++) {
-    const sy = LAYOUT.coffee.y + 12 - ((t * 0.02 + s * 4) % 10);
-    ctx.globalAlpha = .5 - s * .12;
-    px(ctx, LAYOUT.coffee.x + 10 + Math.round(Math.sin(t * 0.05 + s) * 2), sy, 2, 2, '#cfe8ff');
+  // mesa de xadrez (desenhada, com pecas da base nao existentes)
+  drawChessTable();
+}
+function drawChessTable() {
+  const { x, y, w, h } = CHESS, cell = 10;
+  ctx.globalAlpha = .35; ctx.fillStyle = '#000'; ctx.fillRect(x + 3, y + h - 6, w, 6); ctx.globalAlpha = 1;
+  ctx.fillStyle = '#452b16'; ctx.fillRect(x - 4, y - 4, w + 8, h + 8);
+  ctx.fillStyle = '#6b4425'; ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    ctx.fillStyle = (r + c) % 2 ? '#cfcfc4' : '#4c4a42';
+    ctx.fillRect(x + c*cell, y + r*cell, cell, cell);
   }
-  ctx.globalAlpha = 1;
-  ctx.drawImage(SPR.sofa, LAYOUT.sofa.x, LAYOUT.sofa.y);
-  ctx.drawImage(SPR.chess, LAYOUT.chess.x, LAYOUT.chess.y);
-  ctx.drawImage(SPR.plant, LAYOUT.plant1.x, LAYOUT.plant1.y);
-  ctx.drawImage(SPR.plant, LAYOUT.plant2.x, LAYOUT.plant2.y);
-  // peças do xadrez
-  CHESS_PIECES.forEach(p => {
-    let XX = LAYOUT.chess.x + 2 + p.x * 10 + 1, YY = LAYOUT.chess.y + 2 + p.y * 10 + 1;
+  PIECES.forEach(p => {
+    let X = x + p.x*cell + 1, Y = y + p.y*cell + 1;
     if (chessAnim && chessAnim.p === p) {
-      const k = Math.min(1, (t - chessAnim.start) / 450);
-      XX = LAYOUT.chess.x + 2 + (chessAnim.fx + (p.x - chessAnim.fx) * k) * 10 + 1;
-      YY = LAYOUT.chess.y + 2 + (chessAnim.fy + (p.y - chessAnim.fy) * k) * 10 + 1 - Math.sin(k*Math.PI)*6;
+      const k = Math.min(1, (performance.now() - chessAnim.start) / 420);
+      X = x + (chessAnim.fx + (p.x - chessAnim.fx)*k)*cell + 1;
+      Y = y + (chessAnim.fy + (p.y - chessAnim.fy)*k)*cell + 1 - Math.sin(k*Math.PI)*6;
       if (k >= 1) chessAnim = null;
     }
-    const col = p.c === 0 ? '#f4f4ee' : '#1c1c26', edge = p.c === 0 ? '#b8b8a8' : '#08080d';
-    const h2 = p.t === 'p' ? 4 : (p.t === 'k' || p.t === 'q') ? 6 : 5;
-    px(ctx, XX, YY + (7 - h2), 7, h2, col);
-    px(ctx, XX, YY + (7 - h2), 7, 1, edge);
-    if (p.t === 'k' || p.t === 'q') px(ctx, XX + 2, YY + 1 - h2, 3, 2, col);
+    const col = p.c === 0 ? '#f4f4ee' : '#1c1c26';
+    const hh = p.t === 'p' ? 5 : (p.t === 'k' || p.t === 'q') ? 8 : 7;
+    ctx.fillStyle = col; ctx.fillRect(X, Y + (8 - hh), 7, hh);
+    ctx.fillStyle = p.c === 0 ? '#b8b8a8' : '#08080d';
+    ctx.fillRect(X, Y + 7, 7, 1);
   });
 }
-function drawAgent(a, t) {
-  if (a.state === 'OUT') return;  // está fora: aparece só na escalação
-  const sprite = a.state.startsWith('TO_') || a.state === 'WALK'
-    ? HUMAN[a.idx].frames[(a.f | 0) % 4] : HUMAN[a.idx].idle;
-  ctx.globalAlpha = .35; ctx.fillStyle = '#000';
-  ctx.beginPath(); ctx.ellipse(a.px, a.py + 4, 11, 4, 0, 0, Math.PI*2); ctx.fill();
+// desenha um quadro da folha 96x128 (24x32)
+function drawChar(a, x, y, dir, frame, alpha) {
+  const sheet = SHEETS[a.name];
+  if (!sheet || !sheet.complete || !sheet.naturalWidth) return;
+  const sx = (frame % 4) * FRAME_W, sy = (dir % 4) * FRAME_H;
+  ctx.globalAlpha = alpha == null ? 1 : alpha;
+  ctx.drawImage(sheet, sx, sy, FRAME_W, FRAME_H, x|0, y|0, FRAME_W, FRAME_H);
   ctx.globalAlpha = 1;
-  ctx.drawImage(sprite, a.px - 13, a.py - 46);
-  // spotlight em evento
-  if (a.spotlight > t - 2200) {
-    ctx.strokeStyle = '#ffcf5c'; ctx.lineWidth = 2;
-    ctx.globalAlpha = Math.max(0, 1 - (t - (a.spotlight || 0)) / 2200);
-    ctx.beginPath(); ctx.ellipse(a.px, a.py - 20, 20, 34, 0, 0, Math.PI*2); ctx.stroke();
+}
+function drawAgent(a, t) {
+  if (a.state === 'OUT') return;
+  // sombra
+  ctx.globalAlpha = .35; ctx.fillStyle = '#000';
+  ctx.beginPath(); ctx.ellipse(a.px, a.py + 2, 8, 3, 0, 0, Math.PI*2); ctx.fill();
+  ctx.globalAlpha = 1;
+  const moving = a.state.startsWith('TO_');
+  const frame = moving ? (a.frame | 0) % 4 : 0;
+  drawChar(a, a.px - FRAME_W/2, a.py - FRAME_H + 4, a.dir, frame);
+  // destaque
+  if (a.highlight > t - 2000) {
+    ctx.strokeStyle = '#ffcf5c'; ctx.globalAlpha = Math.max(0, 1 - (t - a.highlight)/2000);
+    ctx.beginPath(); ctx.ellipse(a.px, a.py - 14, 12, 20, 0, 0, Math.PI*2); ctx.stroke();
     ctx.globalAlpha = 1;
   }
   // nome
-  ctx.font = 'bold 8px Consolas'; ctx.textAlign = 'center';
-  const tw2 = a.name.length * 6 + 8;
-  ctx.fillStyle = 'rgba(8,9,12,.7)'; ctx.fillRect(a.px - tw2/2, a.py + 8, tw2, 10);
-  ctx.fillStyle = '#9ff'; ctx.fillText(a.name, a.px, a.py + 10);
+  ctx.font = 'bold 7px Consolas'; ctx.textAlign = 'center';
+  const w = a.name.length * 5 + 6;
+  ctx.fillStyle = 'rgba(8,9,12,.72)'; ctx.fillRect(a.px - w/2, a.py + 4, w, 9);
+  ctx.fillStyle = '#9ff'; ctx.fillText(a.name, a.px, a.py + 5);
   ctx.textAlign = 'left';
-  // bolha
+  // balao
   if (a.bubble && t < a.bubbleUntil) {
-    const text = a.bubble.length > 30 ? a.bubble.slice(0, 29) + '…' : a.bubble;
-    const bw = Math.min(250, 12 + text.length * 5.4), bh = 18;
-    const bx = Math.max(6, Math.min(LW - bw - 6, a.px - bw/2)), by = a.py - 70;
-    ctx.globalAlpha = .95;
-    px(ctx, bx, by, bw, bh, '#f4f4ee');
-    px(ctx, a.px - 4, by + bh, 8, 4, '#f4f4ee');
+    const txt = a.bubble.length > 28 ? a.bubble.slice(0, 27) + '…' : a.bubble;
+    const bw = Math.min(250, 10 + txt.length * 5), bh = 16;
+    const bx = Math.max(4, Math.min(LW - bw - 4, a.px - bw/2)), by = a.py - FRAME_H - 14;
+    ctx.globalAlpha = .95; ctx.fillStyle = '#f4f4ee';
+    ctx.fillRect(bx, by, bw, bh); ctx.fillRect(a.px - 3, by + bh, 6, 4);
     ctx.font = '8px Consolas'; ctx.fillStyle = '#1a1c24';
-    ctx.fillText(text, bx + 6, by + 6);
+    ctx.fillText(txt, bx + 5, by + 5);
     ctx.globalAlpha = 1;
   }
 }
 function drawRoster() {
-  const r = document.getElementById('roster');
-  r.innerHTML = AGENTS.map(a => {
-    const st = a.state === 'OUT' ? 'out' : '';
+  document.getElementById('roster').innerHTML = AGENTS.map(a => {
+    const cls = a.state === 'OUT' ? 'out' : '';
     const label = a.state === 'OUT'
       ? `${a.name} 🚪→ ${a.outDest || 'fora'}`
-      : `${a.name} ${STATES[a.state] || '🚶'} ${a.energy.toFixed(0)}%`;
-    return `<div class="chip ${st}">${label}</div>`;
+      : `${a.name} ${({WORK:'💻',TO_WORK:'💻',COFFEE:'☕',TO_COFFEE:'☕',REST:'🛋',TO_REST:'🛋',CHESS:'♟',TO_CHESS:'♟',PROCESS:'🌉',TO_DOOR:'🚪',OUT:'🚪'})[a.state] || '🚶'} ${a.energy.toFixed(0)}%`;
+    return `<div class="chip ${cls}">${label}</div>`;
   }).join('');
 }
+
+// ---------------- loop ----------------
 function render(t) {
-  ctx.fillStyle = '#05060a';
+  ctx.fillStyle = '#0a0c10';
   ctx.fillRect(0, 0, cv.width, cv.height);
   ctx.save();
   ctx.translate(offX, offY); ctx.scale(scale, scale);
   ctx.imageSmoothingEnabled = false;
+
   drawRoom(t);
-  drawFurniture(t);
-  const visible = AGENTS.filter(a => a.state !== 'OUT');
-  visible.forEach(a => {
+  drawMob();
+
+  const vis = AGENTS.filter(a => a.state !== 'OUT');
+  vis.forEach(a => {
     if (a.state.startsWith('TO_')) {
       const dx = a.tx - a.px, dy = a.ty - a.py, d = Math.hypot(dx, dy);
-      if (d > 2) { a.px += dx/d * 0.7; a.py += dy/d * 0.7; a.f += 0.14; }
+      if (d > 2) {
+        a.px += dx/d * 0.75; a.py += dy/d * 0.75;
+        a.f += 0.14;
+        a.frame = (a.frame + 0.10) % 4;
+        a.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? DIR.RIGHT : DIR.LEFT) : (dy > 0 ? DIR.DOWN : DIR.UP);
+      }
     }
-    collide(a);
   });
-  separate(visible);
-  const dt = 16;
-  AGENTS.forEach(a => agentBrain(a, t, dt));
+  vis.forEach(collide);
+  separate(vis);
+  AGENTS.forEach(a => brain(a, t));
   dispatchTasks();
   chessStep(t);
-  [...visible].sort((a, b) => a.py - b.py).forEach(a => drawAgent(a, t));
-  // vinheta vertical (estilo tikTok)
-  const vg = ctx.createLinearGradient(0, 0, 0, LH);
-  vg.addColorStop(0, 'rgba(0,0,0,.35)'); vg.addColorStop(.2, 'transparent');
-  vg.addColorStop(.85, 'transparent'); vg.addColorStop(1, 'rgba(0,0,0,.45)');
-  ctx.fillStyle = vg; ctx.fillRect(0, 0, LW, LH);
+
+  // desenha por profundidade (y) — quem esta mais em cima primeiro
+  [...vis].sort((a, b) => a.py - b.py).forEach(a => drawAgent(a, t));
+
+  // vinheta
+  const g = ctx.createLinearGradient(0, 0, 0, LH);
+  g.addColorStop(0, 'rgba(0,0,0,.30)'); g.addColorStop(.2, 'transparent');
+  g.addColorStop(.85, 'transparent'); g.addColorStop(1, 'rgba(0,0,0,.40)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, LW, LH);
   ctx.restore();
+
   drawRoster();
   requestAnimationFrame(render);
 }
