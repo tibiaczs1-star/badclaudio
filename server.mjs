@@ -36,6 +36,7 @@ function home() {
 <html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>BadClaudio — Catálogo CZS</title>
+<link rel="icon" href="/claudio.ico">
 <style>
 :root{--r:#ff164f;--p:#ff52b8;--c:#18dbff;--bg:#0b0c10}
 *{box-sizing:border-box}
