@@ -198,7 +198,7 @@ async function poll() {
     const n = Math.min(room.requests - lastReq, 2);
     for (let k = 0; k < n; k++) taskQueue.push(1);
     spawnRider();
-    logWrite('sys', null, n + ' requisição(ões) na ponte — motoboy despachado');
+    logWrite('sys', null, 'chegou pedido novo na ponte — motoboy já saiu');
     toast('⚡ requisição na ponte');
   }
   lastReq = room.requests || 0;
@@ -261,39 +261,46 @@ let chessPlayers=[], damaPlayers=[], poolPlayers=[], dust=[];
 function startDelivery(a) {
   a.carrying = true;
   goTo(a, BOSS.x-14, BOSS.y+16, 'TO_BOSS');
-  logWrite('', a.name, 'terminou o trabalho e está indo entregar ao Diretor');
-  say(a, 'levando o relatório pro Diretor', 5000);
+  const ENTREGAS = [
+    'acabei o que estava fazendo, vou mostrar pro Diretor',
+    'terminei e vou passar pro chefe',
+    'fechei a tarefa, indo entregar',
+    'deu certo, vou levar pro Diretor ver'
+  ];
+  const fala = ENTREGAS[(Math.random()*ENTREGAS.length)|0];
+  logWrite('', a.name, fala);
+  say(a, fala, 5000);
 }
 function pickActivity(a) {
   const r = Math.random();
-  if (r < .20) return startDelivery(a);
-  if (r < .32) {
+  if (r < .10) return startDelivery(a);
+  if (r < .22) {
     const i = SEATS.findIndex((s,k) => !SEAT_TAKEN['s'+k]);
     if (i >= 0) { SEAT_TAKEN['s'+i] = a.name; goTo(a, SEATS[i].x, SEATS[i].y, 'TO_SOFA'); say(a, 'descansando um pouco'); return; }
     return startDelivery(a);
   }
-  if (r < .42) {
+  if (r < .34) {
     const i = STUDY_SEATS.findIndex((s,k) => !STUDY_TAKEN['t'+k]);
     if (i >= 0) { STUDY_TAKEN['t'+i] = a.name; goTo(a, STUDY_SEATS[i].x, STUDY_SEATS[i].y, 'TO_STUDY'); say(a, 'estudando'); return; }
     return startDelivery(a);
   }
-  if (r < .50) { goTo(a, LUNCH.x+LUNCH.w/2, LUNCH.y+LUNCH.h+14, 'TO_EAT');  say(a, 'almoçando'); return; }
-  if (r < .57) { goTo(a, GYM.x+GYM.w/2, GYM.y+GYM.h+12, 'TO_GYM');           say(a, 'treinando'); return; }
-  if (r < .63) { goTo(a, MAT.x+MAT.w/2, MAT.y+MAT.h+12, 'TO_NAP');           say(a, 'tirando um cochilo'); return; }
-  if (r < .70 && dust.length) {
+  if (r < .44) { goTo(a, LUNCH.x+LUNCH.w/2, LUNCH.y+LUNCH.h+14, 'TO_EAT');  say(a, 'almoçando'); return; }
+  if (r < .52) { goTo(a, GYM.x+GYM.w/2, GYM.y+GYM.h+12, 'TO_GYM');           say(a, 'treinando'); return; }
+  if (r < .60) { goTo(a, MAT.x+MAT.w/2, MAT.y+MAT.h+12, 'TO_NAP');           say(a, 'tirando um cochilo'); return; }
+  if (r < .68 && dust.length) {
     const d = dust[(Math.random()*dust.length)|0];
     goTo(a, d.x, d.y+12, 'TO_CLEAN', d); say(a, 'limpando a bagunça'); return;
   }
-  if (r < .76) {
+  if (r < .74) {
     a.outDest = DEST[(Math.random()*DEST.length)|0];
     goTo(a, DOOR.x+DOOR.w/2, DOOR.y+30, 'TO_DOOR');
     logWrite('', a.name, 'saiu do escritório pra ' + a.outDest);
     say(a, 'saindo pra ' + a.outDest, 5000); return;
   }
-  if (r < .83) { goTo(a, CHESS.x+(a.idx%2?8:CHESS.w-8), CHESS.y+CHESS.h+12, 'TO_CHESS'); say(a, 'jogando xadrez'); return; }
-  if (r < .89) { goTo(a, DRAUGHT.x+(a.idx%2?8:DRAUGHT.w-8), DRAUGHT.y+DRAUGHT.h+12, 'TO_DRAUGHT'); say(a, 'jogando damas'); return; }
-  if (r < .94) { goTo(a, POOL.x+(a.idx%2?6:POOL.w-6), POOL.y+POOL.h+12, 'TO_POOL'); say(a, 'jogando sinuca'); return; }
-  if (r < .97) {
+  if (r < .82) { goTo(a, CHESS.x+(a.idx%2?8:CHESS.w-8), CHESS.y+CHESS.h+12, 'TO_CHESS'); say(a, 'jogando xadrez'); return; }
+  if (r < .88) { goTo(a, DRAUGHT.x+(a.idx%2?8:DRAUGHT.w-8), DRAUGHT.y+DRAUGHT.h+12, 'TO_DRAUGHT'); say(a, 'jogando damas'); return; }
+  if (r < .93) { goTo(a, POOL.x+(a.idx%2?6:POOL.w-6), POOL.y+POOL.h+12, 'TO_POOL'); say(a, 'jogando sinuca'); return; }
+  if (r < .96) {
     goTo(a, RING.x+(a.idx%2?10:RING.w-10), RING.y+RING.h+12, 'TO_WING');
     logWrite('', a.name, 'foi ao ringue treinar Wing Chun');
     say(a, 'treinando wing chun'); return;
