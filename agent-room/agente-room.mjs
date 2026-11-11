@@ -1,11 +1,9 @@
 /* ============================================================
-   BADCLAUDIO — AGENT ROOM 2D (PIXEL ART)
-   Escritorio visual que abre junto com o BadClaudio.
-   Serve a sala em http://127.0.0.1:3399 e consulta o bridge
-   para mostrar estado real dos canais e do chat.
-
-   Como usar: node agente-room.mjs  (ou e iniciado junto pelo
-   Iniciar-Claudio / claudio-cli-normal)
+   BADCLAUDIO — AGENT ROOM 2D HI-FI (servidor)
+   Escritorio pixel art 100% desenhado em codigo (sem sprites).
+   Serve a cena em http://127.0.0.1:3399 e reflete o estado REAL
+   da ponte (bridge local) em /api/room-status: online, canais,
+   modelos, requisicoes e ultimo modelo servido.
    ============================================================ */
 import http from 'http';
 import fs from 'fs';
@@ -16,62 +14,70 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.AGENT_ROOM_PORT || 3399);
 const BRIDGE_URL = process.env.BRIDGE_URL || 'http://127.0.0.1:' + (process.env.BRIDGE_PORT || 20129);
 const HTML_PATH = path.join(__dirname, 'index.html');
-const ASSETS_DIR = path.join(__dirname, 'assets');
+const ICO_PATH = path.join(__dirname, '..', 'claudio.ico');
 
-const TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml' };
+const TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 
-let lastStatus = null;
-async function refreshStatus() {
+let cache = { at: 0, data: null };
+async function bridgeStats() {
+  const now = Date.now();
+  if (cache.data && now - cache.at < 3000) return cache.data;
+  let out = { online: false, keys: 0, models: 0, requests: 0, lastServed: null, server: BRIDGE_URL };
   try {
-    const r = await fetch(BRIDGE_URL + '/health', { signal: AbortSignal.timeout(2000) });
-    if (r.ok) { lastStatus = await r.json(); return; }
+    const health = await fetch(BRIDGE_URL + '/health', { signal: AbortSignal.timeout(2000) });
+    if (health.ok) {
+      const h = await health.json();
+      out.online = h.status === 'ok';
+      out.keys = h.keys || 0;
+      out.models = h.models || 0;
+    }
+    try {
+      const stats = await fetch(BRIDGE_URL + '/stats', { signal: AbortSignal.timeout(2000) });
+      if (stats.ok) {
+        const s = await stats.json();
+        out.requests = s.requests || 0;
+        if (s.lastServed) out.lastServed = s.lastServed.model + ' via ' + s.lastServed.key;
+      }
+    } catch {}
   } catch {}
-  lastStatus = null;
+  cache = { at: now, data: out };
+  return out;
 }
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
 
   if (url.pathname === '/api/room-status') {
-    await refreshStatus();
-    const online = Boolean(lastStatus && lastStatus.status === 'ok');
-    const keys = lastStatus ? (lastStatus.keys || 0) : 0;
+    const data = await bridgeStats();
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-    res.end(JSON.stringify({
-      online,
-      keys,
-      models: lastStatus ? (lastStatus.models || 0) : 0,
-      server: BRIDGE_URL
-    }));
+    res.end(JSON.stringify(data));
     return;
   }
 
   if (url.pathname === '/' || url.pathname === '/index.html') {
     try {
       const html = fs.readFileSync(HTML_PATH, 'utf8');
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(html);
     } catch {
-      res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end('index.html nao encontrado junto de agente-room.mjs');
     }
     return;
   }
 
-  if (url.pathname.startsWith('/assets/')) {
-    const rel = url.pathname.replace('/assets/', '').replace(/\.\./g, '').replace(/\\/g, '');
-    const file = path.join(ASSETS_DIR, rel);
-    if (file.startsWith(ASSETS_DIR) && fs.existsSync(file) && fs.statSync(file).isFile()) {
-      res.writeHead(200, { 'Content-Type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream' });
-      res.end(fs.readFileSync(file));
+  if (url.pathname === '/claudio.ico' || url.pathname === '/favicon.ico') {
+    try {
+      res.writeHead(200, { 'Content-Type': 'image/x-icon' });
+      res.end(fs.readFileSync(ICO_PATH));
       return;
-    }
+    } catch {}
   }
 
-  res.writeHead(404, { 'Content-Type': 'text/plain' });
+  res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
   res.end('nao encontrado');
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`[Agent Room] Escritorio 2D em http://127.0.0.1:${PORT} (bridge: ${BRIDGE_URL})`);
+  console.log(`[Agent Room] HQ 2D em http://127.0.0.1:${PORT} (ponte: ${BRIDGE_URL})`);
 });
