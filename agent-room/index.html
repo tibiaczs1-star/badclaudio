@@ -866,17 +866,24 @@ function drawAgent(a, t) {
       ctx.fillStyle = '#cfd2da'; ctx.fillRect(a.px+9, a.py+7, 5, 2);
     }
   }
+  // desloca a etiqueta se outro agente estiver colado (evita texto sobreposto)
+  let labelOffset = 0;
+  for (const o of AGENTS) {
+    if (o === a || o.state === 'OUT') continue;
+    if (Math.abs(o.px - a.px) < 26 && Math.abs(o.py - a.py) < 22 && o.idx < a.idx) labelOffset += 9;
+  }
+  if (labelOffset > 18) labelOffset = 18;
   const line1 = a.name + (a.emotion && a.emotionUntil > t ? ' ' + a.emotion : '');
   ctx.font = 'bold 7px Consolas'; ctx.textAlign = 'center';
   const w1 = ctx.measureText(line1).width + 8;
-  ctx.fillStyle = 'rgba(8,9,12,.78)'; ctx.fillRect(a.px-w1/2, a.py+4, w1, 9);
+  ctx.fillStyle = 'rgba(8,9,12,.78)'; ctx.fillRect(a.px-w1/2, a.py+4+labelOffset, w1, 9);
   ctx.fillStyle = a.state === 'OUT' ? '#ffbf9d' : '#9ff';
-  ctx.fillText(line1, a.px, a.py+5);
+  ctx.fillText(line1, a.px, a.py+5+labelOffset);
   ctx.font = '6px Consolas';
   const line2 = a.state === 'OUT' ? '→ ' + (a.outDest || 'fora') : (ACT[a.state] || 'andando');
   const w2 = ctx.measureText(line2).width + 8;
-  ctx.fillStyle = 'rgba(8,9,12,.62)'; ctx.fillRect(a.px-w2/2, a.py+13, w2, 8);
-  ctx.fillStyle = '#c7d0dd'; ctx.fillText(line2, a.px, a.py+14);
+  ctx.fillStyle = 'rgba(8,9,12,.62)'; ctx.fillRect(a.px-w2/2, a.py+13+labelOffset, w2, 8);
+  ctx.fillStyle = '#c7d0dd'; ctx.fillText(line2, a.px, a.py+14+labelOffset);
   ctx.textAlign = 'left';
   if (a.bubble && t < a.bubbleUntil) {
     const txt = a.bubble.length > 26 ? a.bubble.slice(0,25)+'…' : a.bubble;
