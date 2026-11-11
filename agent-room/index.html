@@ -19,12 +19,19 @@
   .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; background:#555; vertical-align:middle; }
   .dot.on { background:var(--ok); box-shadow:0 0 8px var(--ok); }
   #keysTxt { color:#8f96a4; }
-  #world { position:absolute; inset:26px 0 42px 0; overflow:hidden; }
+  #world { position:absolute; inset:26px 0 42px 0; overflow:hidden; transition:right .28s cubic-bezier(.2,.8,.3,1); }
+  body.panel-open #world { right:min(86vw,320px); }
   canvas { display:block; width:100%; height:100%; image-rendering:pixelated; }
-  #panel { position:fixed; top:26px; right:0; bottom:22px; width:min(78vw,300px); z-index:8;
-           background:#070a0e; border-left:1px solid #22303a; display:flex; flex-direction:column;
-           transform:translateX(102%); transition:transform .22s ease; }
-  #panel.open { transform:translateX(0); }
+  /* painel = porta que abre para fora do quadro */
+  #panel { position:fixed; top:26px; right:0; bottom:22px; width:min(86vw,320px); z-index:8;
+           background:linear-gradient(90deg,#070a0e 0%,#0a0f15 100%); border-left:2px solid #2a3a48;
+           box-shadow:-14px 0 24px rgba(0,0,0,.75); display:flex; flex-direction:column;
+           transform-origin:right center; transform:perspective(900px) rotateY(-92deg);
+           opacity:0; pointer-events:none; transition:transform .28s cubic-bezier(.2,.8,.3,1), opacity .2s; }
+  #panel.open { transform:perspective(900px) rotateY(0deg); opacity:1; pointer-events:auto; }
+  /* puxador/maçaneta da porta */
+  #panel .head::before { content:''; display:inline-block; width:9px; height:9px; border:2px solid var(--cy);
+                         border-radius:50%; margin-right:2px; }
   #panel .head { display:flex; align-items:center; gap:6px; padding:6px 8px; background:#0d1218;
                  border-bottom:1px solid #22303a; font-size:10px; color:var(--cy); letter-spacing:1px; }
   #panel .head .x { margin-left:auto; cursor:pointer; color:#77808f; padding:0 4px; }
@@ -166,6 +173,7 @@ function renderLog() {
 }
 function openPanel(open) {
   panel.classList.toggle('open', open);
+  document.body.classList.toggle('panel-open', open);
   document.getElementById('btnLog').classList.toggle('on', open);
   if (open) setTimeout(() => document.getElementById('chatIn').focus(), 240);
 }
@@ -253,42 +261,42 @@ let chessPlayers=[], damaPlayers=[], poolPlayers=[], dust=[];
 function startDelivery(a) {
   a.carrying = true;
   goTo(a, BOSS.x-14, BOSS.y+16, 'TO_BOSS');
-  logWrite('', a.name, 'terminou a tarefa e está levando o relatório ao Diretor');
-  say(a, '📄 levando pro Diretor…', 5000);
+  logWrite('', a.name, 'terminou o trabalho e está indo entregar ao Diretor');
+  say(a, 'levando o relatório pro Diretor', 5000);
 }
 function pickActivity(a) {
   const r = Math.random();
   if (r < .20) return startDelivery(a);
   if (r < .32) {
     const i = SEATS.findIndex((s,k) => !SEAT_TAKEN['s'+k]);
-    if (i >= 0) { SEAT_TAKEN['s'+i] = a.name; goTo(a, SEATS[i].x, SEATS[i].y, 'TO_SOFA'); say(a, '🛋 descanso'); return; }
+    if (i >= 0) { SEAT_TAKEN['s'+i] = a.name; goTo(a, SEATS[i].x, SEATS[i].y, 'TO_SOFA'); say(a, 'descansando um pouco'); return; }
     return startDelivery(a);
   }
   if (r < .42) {
     const i = STUDY_SEATS.findIndex((s,k) => !STUDY_TAKEN['t'+k]);
-    if (i >= 0) { STUDY_TAKEN['t'+i] = a.name; goTo(a, STUDY_SEATS[i].x, STUDY_SEATS[i].y, 'TO_STUDY'); say(a, '📚 estudando'); return; }
+    if (i >= 0) { STUDY_TAKEN['t'+i] = a.name; goTo(a, STUDY_SEATS[i].x, STUDY_SEATS[i].y, 'TO_STUDY'); say(a, 'estudando'); return; }
     return startDelivery(a);
   }
-  if (r < .50) { goTo(a, LUNCH.x+LUNCH.w/2, LUNCH.y+LUNCH.h+14, 'TO_EAT');  say(a, '🍽 almoço'); return; }
-  if (r < .57) { goTo(a, GYM.x+GYM.w/2, GYM.y+GYM.h+12, 'TO_GYM');           say(a, '💪 treino'); return; }
-  if (r < .63) { goTo(a, MAT.x+MAT.w/2, MAT.y+MAT.h+12, 'TO_NAP');           say(a, '😴 cochilo'); return; }
+  if (r < .50) { goTo(a, LUNCH.x+LUNCH.w/2, LUNCH.y+LUNCH.h+14, 'TO_EAT');  say(a, 'almoçando'); return; }
+  if (r < .57) { goTo(a, GYM.x+GYM.w/2, GYM.y+GYM.h+12, 'TO_GYM');           say(a, 'treinando'); return; }
+  if (r < .63) { goTo(a, MAT.x+MAT.w/2, MAT.y+MAT.h+12, 'TO_NAP');           say(a, 'tirando um cochilo'); return; }
   if (r < .70 && dust.length) {
     const d = dust[(Math.random()*dust.length)|0];
-    goTo(a, d.x, d.y+12, 'TO_CLEAN', d); say(a, '🧹 limpando'); return;
+    goTo(a, d.x, d.y+12, 'TO_CLEAN', d); say(a, 'limpando a bagunça'); return;
   }
   if (r < .76) {
     a.outDest = DEST[(Math.random()*DEST.length)|0];
     goTo(a, DOOR.x+DOOR.w/2, DOOR.y+30, 'TO_DOOR');
-    logWrite('', a.name, 'saiu para ' + a.outDest);
-    say(a, '🚪 ' + a.outDest, 5000); return;
+    logWrite('', a.name, 'saiu do escritório pra ' + a.outDest);
+    say(a, 'saindo pra ' + a.outDest, 5000); return;
   }
-  if (r < .83) { goTo(a, CHESS.x+(a.idx%2?8:CHESS.w-8), CHESS.y+CHESS.h+12, 'TO_CHESS'); say(a, '♟ xadrez'); return; }
-  if (r < .89) { goTo(a, DRAUGHT.x+(a.idx%2?8:DRAUGHT.w-8), DRAUGHT.y+DRAUGHT.h+12, 'TO_DRAUGHT'); say(a, '⚪ damas'); return; }
-  if (r < .94) { goTo(a, POOL.x+(a.idx%2?6:POOL.w-6), POOL.y+POOL.h+12, 'TO_POOL'); say(a, '🎱 sinuca'); return; }
+  if (r < .83) { goTo(a, CHESS.x+(a.idx%2?8:CHESS.w-8), CHESS.y+CHESS.h+12, 'TO_CHESS'); say(a, 'jogando xadrez'); return; }
+  if (r < .89) { goTo(a, DRAUGHT.x+(a.idx%2?8:DRAUGHT.w-8), DRAUGHT.y+DRAUGHT.h+12, 'TO_DRAUGHT'); say(a, 'jogando damas'); return; }
+  if (r < .94) { goTo(a, POOL.x+(a.idx%2?6:POOL.w-6), POOL.y+POOL.h+12, 'TO_POOL'); say(a, 'jogando sinuca'); return; }
   if (r < .97) {
     goTo(a, RING.x+(a.idx%2?10:RING.w-10), RING.y+RING.h+12, 'TO_WING');
     logWrite('', a.name, 'foi ao ringue treinar Wing Chun');
-    say(a, '🥋 wing chun'); return;
+    say(a, 'treinando wing chun'); return;
   }
   startArgument(a);
 }
@@ -319,8 +327,8 @@ function brain(a, t) {
       a.energy -= .018;
       if (a.energy < 26) {
         goTo(a, COOLER.x+COOLER.w/2, COOLER.y+COOLER.h+14, 'TO_COOLER');
-        logWrite('', a.name, 'energia em ' + a.energy.toFixed(0) + '% — foi beber água');
-        say(a, '💧 água'); return;
+        logWrite('', a.name, 'estava cansado e foi beber água');
+        say(a, 'bebendo água'); return;
       }
       if (t > a.next) { a.next = t + 11000 + Math.random()*11000; pickActivity(a); }
       break;
@@ -354,8 +362,8 @@ function brain(a, t) {
     case 'HANDOFF':
       if (a.stateT > 1400 && a.carrying) {
         a.carrying = false;
-        say(a, '📄 entregue!', 3000);
-        say(DIRETOR, '📥 recebido!', 4200);
+        say(a, 'entreguei o relatório', 3000);
+        say(DIRETOR, 'recebi, obrigado', 4200);
         DIRETOR.mood = Math.min(100, DIRETOR.mood+5);
         setEmotion(DIRETOR, '😊');
         logWrite('sys', null, a.name + ' entregou o relatório ao Diretor');
@@ -368,7 +376,7 @@ function brain(a, t) {
       if (t > a.outUntil) {
         a.px = DOOR.x+DOOR.w/2; a.py = DOOR.y+30;
         logWrite('', a.name, 'voltou de ' + a.outDest);
-        say(a, '↩ voltei', 4000);
+        say(a, 'já voltei', 4000);
         a.outDest = null; backToDesk(a);
       }
       break;
@@ -388,8 +396,8 @@ function dispatchTasks() {
     taskQueue.shift();
     const a = free[(Math.random()*free.length)|0];
     goTo(a, RACK.x-14, RACK.y+44, 'PROCESS');
-    say(a, '🌉 no rack', 4500);
-    logWrite('', a.name, 'foi ao rack processar uma requisição');
+    say(a, 'atendendo uma requisição', 4500);
+    logWrite('', a.name, 'atendeu um pedido que chegou pela ponte');
   }
 }
 
@@ -483,7 +491,7 @@ function spawnRider() {
   if (RIDERS.length >= 3) return;
   const cargo = ['pacote','token','relatório','código','backup'][(Math.random()*5)|0];
   RIDERS.push({ x: SUBDOOR.x+14, y: 512, x0: SUBDOOR.x+14, target: 120+Math.random()*140, phase:'ida', t:0, cargo:cargo });
-  logWrite('', 'motoboy', 'saiu da portinha levando ' + cargo);
+  logWrite('', 'motoboy', 'saiu pela portinha levando ' + cargo);
 }
 function riderStep(t) {
   if (Math.random() < .003 && RIDERS.length < 2) spawnRider();

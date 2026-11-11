@@ -96,7 +96,9 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (url.pathname === '/healthz') {
+  // aceita healthz em qualquer forma: o Render as vezes grava o caminho
+  // com o prefixo do sistema (ex.: "C:/Program Files/Git/healthz").
+  if (/healthz\/?$/i.test(url.pathname)) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok' }));
     return;
