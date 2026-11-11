@@ -1,0 +1,31 @@
+{
+  "camadas": [
+    { "tokens": 100000, "nome": "Primeiros Dentes", "missao": "Concluir a primeira tarefa real" },
+    { "tokens": 1000000, "nome": "Motor Ligado", "missao": "Finalizar um projeto pequeno" },
+    { "tokens": 5000000, "nome": "Tentaculo Coder", "missao": "Corrigir e testar um codigo" },
+    { "tokens": 25000000, "nome": "Esquadrao Ativo", "missao": "Usar tres modos do BadClaudio" },
+    { "tokens": 100000000, "nome": "Chefe de Oficina", "missao": "Entregar um projeto completo" },
+    { "tokens": 350000000, "nome": "Capitao Turbo", "missao": "Concluir cinco entregas verificadas" },
+    { "tokens": 800000000, "nome": "Monstro da Cota", "missao": "Otimizar um projeto grande" },
+    { "tokens": 1000000000, "nome": "Claudio Bilionario", "missao": "Atingir um bilhao de tokens acumulados" },
+    { "tokens": 5000000000, "nome": "Lenda do Terminal", "missao": "Manter uma sequencia de projetos concluidos" },
+    { "tokens": 10000000000, "nome": "Rei dos Tentaculos", "missao": "Atingir dez bilhoes de tokens acumulados" },
+    { "tokens": 20000000000, "nome": "BadClaudio Supremo", "missao": "Atingir vinte bilhoes de tokens acumulados" }
+  ],
+  "girias": {
+    "normal": [
+      "Porra, ta gastando, hein, playboy! Pra comprar memoria, nada.",
+      "Se nao fosse eu, ja teria acabado a cota.",
+      "Vai atras de um cocota... mas salva o projeto antes!",
+      "Clica em mim, porra! Clica em mim, porra!",
+      "O BadClaudio trabalha e o cooler que lute."
+    ],
+    "familia": [
+      "Motor ligado. Bora trabalhar!",
+      "Se nao fosse eu, essa tarefa ainda estava na fila.",
+      "Salva o projeto antes de sair!",
+      "Clica em mim para abrir a central.",
+      "Codigo na tela e ideia na cabeca."
+    ]
+  }
+}

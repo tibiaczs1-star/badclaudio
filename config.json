@@ -1,0 +1,9 @@
+{
+  "server_url": "",
+  "model": "claude-fable-5.1-free",
+  "max_tokens": 2048,
+  "family_mode": false,
+  "license_id": "",
+  "normal_interface_url": "",
+  "history_dir": ""
+}

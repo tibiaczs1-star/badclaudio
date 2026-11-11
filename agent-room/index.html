@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BadClaudio — Agent Room 2D</title>
+<style>
+  :root { --r:#ff164f; --p:#ff52b8; --c:#18dbff; --ok:#66ff75; --bg:#0b0c10; --ink:#e8e8ee; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 Consolas,"Courier New",monospace; height:100vh; overflow:hidden; }
+  #bar { position:fixed; top:0; left:0; right:0; z-index:5; display:flex; gap:14px; align-items:center;
+         padding:8px 14px; background:#101218; border-bottom:1px solid #3a1520; }
+  #bar .brand { color:var(--r); font-weight:900; letter-spacing:1px; }
+  #bar .st { color:#9aa; font-size:12px; }
+  #bar .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; background:#555; }
+  #bar .dot.on { background:var(--ok); box-shadow:0 0 8px var(--ok); }
+  #world { position:absolute; inset:42px 0 0 0; overflow:hidden; }
+  canvas { image-rendering:pixelated; display:block; position:absolute; top:0; left:0; }
+  #toast { position:fixed; right:14px; bottom:14px; max-width:340px; background:#12141a; color:var(--ink);
+           border:1px solid var(--r); border-left:4px solid var(--r); padding:10px 12px; font-size:12px;
+           opacity:0; transition:opacity .4s; z-index:9; }
+  #legend { position:fixed; left:14px; bottom:12px; font-size:11px; color:#8a8f9c; z-index:9; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <span class="brand">BADCLAUDIO</span>
+  <span class="st"><span class="dot" id="dot"></span><span id="statusTxt">conectando ao bridge…</span></span>
+  <span class="st" id="keysTxt"></span>
+</div>
+<div id="world"><canvas id="cv"></canvas></div>
+<div id="toast"></div>
+<div id="legend">Agent Room 2D — os personagens caminham e reagem ao estado real do BadClaudio.</div>
+<script>
+// ===================== cenario =====================
+const cv = document.getElementById('cv');
+const x = cv.getContext('2d');
+let W = window.innerWidth, H = window.innerHeight - 42;
+cv.width = W; cv.height = H;
+window.addEventListener('resize', () => { W = window.innerWidth; H = window.innerHeight - 42; cv.width = W; cv.height = H; });
+
+// sprite loading
+const IMG = {};
+const FILES = ['floor_wood_noble.png','floor_tech_slate.png','floor_parquet_oak.png','wall_texture_limezu.png','wall_north_window.png',
+  'office_desk_executive.png','office_dev_station.png','office_server_rack.png','office_plant_ficus.png','office_reception_desk.png',
+  'office_leather_sofa.png','office_bench_judge.png','office_audio_desk.png','soft_shadow_ellipse.png',
+  'director_executive.png','godot_senior_dev.png','ai_researcher.png','concept_artist.png','dev_intern.png',
+  'qa_auditor.png','infra_devops.png','sound_designer.png','modeler_3d.png','shader_engineer.png','community_lead.png'];
+let loaded = 0;
+FILES.forEach(f => { const i = new Image(); i.src = 'assets/' + f; i.onload = () => loaded++; IMG[f] = i; });
+
+// ===================== agentes =====================
+const AGENTS = [
+  { spr:'director_executive.png',  name:'Diretor',      desk:'office_desk_executive.png', x:0.30, y:0.28 },
+  { spr:'godot_senior_dev.png',    name:'Dev Senior',   desk:'office_dev_station.png',    x:0.48, y:0.30 },
+  { spr:'ai_researcher.png',       name:'Pesquisador',  desk:'office_dev_station.png',    x:0.62, y:0.32 },
+  { spr:'qa_auditor.png',          name:'Auditor QA',   desk:'office_bench_judge.png',    x:0.76, y:0.28 },
+  { spr:'infra_devops.png',        name:'Infra',        desk:'office_server_rack.png',    x:0.86, y:0.45 },
+  { spr:'concept_artist.png',      name:'Artista',      desk:'office_audio_desk.png',     x:0.22, y:0.55 },
+  { spr:'sound_designer.png',      name:'Som',          desk:'office_audio_desk.png',     x:0.38, y:0.60 },
+  { spr:'community_lead.png',      name:'Comunidade',   desk:'office_reception_desk.png', x:0.14, y:0.30 }
+];
+AGENTS.forEach(a => { a.px = a.x*W; a.py = a.y*H; a.tx = a.px; a.ty = a.py; a.state = 'idle'; a.f = Math.random()*10; });
+
+function wander() {
+  AGENTS.forEach(a => {
+    if (Math.random() < 0.006) {
+      a.tx = Math.max(20, Math.min(W-60, a.x*W + (Math.random()-0.5)*140));
+      a.ty = Math.max(20, Math.min(H-80, a.y*H + (Math.random()-0.5)*90));
+      a.state = 'walk';
+    }
+  });
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.opacity = 1;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.style.opacity = 0, 5000);
+}
+
+// ===================== status real =====================
+let room = { online:false, keys:0, models:0 };
+async function poll() {
+  try {
+    const r = await fetch('/api/room-status');
+    room = await r.json();
+    const dot = document.getElementById('dot');
+    dot.className = 'dot' + (room.online ? ' on' : '');
+    document.getElementById('statusTxt').textContent = room.online ? 'Bridge ONLINE' : 'Bridge offline — fallback local ativo';
+    document.getElementById('keysTxt').textContent = room.online ? (room.keys + ' canais • ' + room.models + ' modelos') : '';
+    if (room.online && !poll.was) toast('🥕 Motor ligado! ' + room.keys + ' canais ativos.');
+    poll.was = room.online;
+  } catch {}
+}
+poll.was = false;
+setInterval(poll, 5000);
+
+// ===================== desenho =====================
+function draw(t) {
+  // piso
+  const floor = IMG['floor_wood_noble.png'];
+  if (floor && floor.complete) {
+    const s = 128;
+    for (let fy = 0; fy < H; fy += s) for (let fx = 0; fx < W; fx += s) x.drawImage(floor, fx, fy, s, s);
+  } else { x.fillStyle = '#2a2015'; x.fillRect(0, 0, W, H); }
+
+  // paredes de fundo
+  const wall = IMG['wall_texture_limezu.png'];
+  if (wall && wall.complete) {
+    const wh = 150;
+    for (let fx = 0; fx < W; fx += 128) x.drawImage(wall, fx, 0, 128, wh);
+    const win = IMG['wall_north_window.png'];
+    if (win && win.complete) for (let fx = 40; fx < W - 200; fx += 320) x.drawImage(win, fx, 6, 128, 128);
+  }
+
+  // decoracao fixa (tapete na sala do diretor)
+  const sofa = IMG['office_leather_sofa.png'];
+  if (sofa && sofa.complete) x.drawImage(sofa, W*0.55, H*0.72, 150, 60);
+  const plant = IMG['office_plant_ficus.png'];
+  if (plant && plant.complete) { x.drawImage(plant, W-90, 12, 64, 96); x.drawImage(plant, W-170, 12, 64, 96); }
+
+  // sombras + agentes + mesas
+  const shadow = IMG['soft_shadow_ellipse.png'];
+  AGENTS.forEach(a => {
+    // mesa do agente
+    const d = IMG[a.desk];
+    if (d && d.complete) x.drawImage(d, a.x*W - 20, a.y*H - 46, 80, 46);
+
+    // movimento
+    if (a.state === 'walk') {
+      const dx = a.tx - a.px, dy = a.ty - a.py;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 2) { a.state = 'idle'; }
+      else { a.px += dx/dist*0.7; a.py += dy/dist*0.7; a.f += 0.15; }
+    } else a.f += 0.02;
+
+    // sombra
+    if (shadow && shadow.complete) x.drawImage(shadow, a.px - 24, a.py + 26, 48, 14);
+
+    // sprite com bob sutil
+    const spr = IMG[a.spr];
+    if (spr && spr.complete) {
+      const bob = Math.sin(a.f) * 2;
+      const act = room.online ? 1 : 0.55;
+      x.globalAlpha = act;
+      x.drawImage(spr, a.px - 24, a.py - 58 + bob, 48, 64);
+      x.globalAlpha = 1;
+    }
+
+    // nome
+    x.font = '10px Consolas';
+    x.textAlign = 'center';
+    x.fillStyle = room.online ? '#9ff' : '#777';
+    x.fillText(a.name, a.px, a.py + 42);
+  });
+
+  wander();
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>
