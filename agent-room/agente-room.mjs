@@ -47,6 +47,42 @@ async function bridgeStats() {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
 
+  // bolha inteligente: pergunta curta a IA da bridge (fallback local se cair)
+  if (url.pathname === '/api/agent-chatter' && req.method === 'POST') {
+    let body = '';
+    req.on('data', c => { body += c; });
+    req.on('end', async () => {
+      let agent = 'agente', context = 'no escritorio';
+      try { const b = JSON.parse(body); agent = String(b.agent || agent).slice(0, 40); context = String(b.context || context).slice(0, 120); } catch {}
+      const prompt = `Voce e o agente "${agent}" do escritorio BadClaudio, acabou de ${context}. Responda em UMA frase curta (max 10 palavras), informal, em portugues.`;
+      try {
+        const r = await fetch(BRIDGE_URL + '/v1/messages', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({ model: 'claude-fable-5.1-free', max_tokens: 60, messages: [{ role: 'user', content: prompt }] }),
+          signal: AbortSignal.timeout(8000)
+        });
+        if (r.ok) {
+          const d = await r.json();
+          const line = (d.content || []).filter(b => b.type === 'text').map(b => b.text).join(' ').trim();
+          if (line) {
+            res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+            res.end(JSON.stringify({ line: line.slice(0, 120), source: 'bridge' }));
+            return;
+          }
+        }
+      } catch {}
+      const fallbacks = [
+        'bora pra cima, time!', 'cafe primeiro, deploy depois.',
+        'missao cumprida, proxima!', 'a ponte ta voando hoje.',
+        'tudo verde no rack.', 'guardei o progresso, tranquilo.'
+      ];
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({ line: fallbacks[(Math.random() * fallbacks.length) | 0], source: 'fallback' }));
+    });
+    return;
+  }
+
   if (url.pathname === '/api/room-status') {
     const data = await bridgeStats();
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
