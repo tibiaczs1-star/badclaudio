@@ -19,7 +19,7 @@
   .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; background:#555; vertical-align:middle; }
   .dot.on { background:var(--ok); box-shadow:0 0 8px var(--ok); }
   #keysTxt { color:#8f96a4; }
-  #world { position:absolute; inset:26px 0 42px 0; overflow:hidden; transition:right .28s cubic-bezier(.2,.8,.3,1); }
+  #world { position:absolute; inset:86px 0 42px 0; overflow:hidden; transition:right .28s cubic-bezier(.2,.8,.3,1); }
   body.panel-open #world { right:min(86vw,320px); }
   canvas { display:block; width:100%; height:100%; image-rendering:pixelated; }
   /* painel = porta que abre para fora do quadro */
@@ -47,18 +47,19 @@
   #composer input:focus { outline:none; border-color:var(--r); }
   #composer button { background:var(--r); border:0; color:#fff; padding:0 11px; border-radius:3px; cursor:pointer; font-weight:700; }
   #faixaMascote { position:fixed; left:0; right:0; top:26px; height:0; z-index:6; pointer-events:none; }
-  #mascote { position:fixed; top:30px; left:50%; transform:translateX(-50%); z-index:9;
+  #mascote { position:fixed; top:32px; left:50%; transform:translateX(-50%); z-index:9;
              cursor:pointer; transition:top .9s cubic-bezier(.2,.8,.3,1), left .9s cubic-bezier(.2,.8,.3,1),
              right .9s cubic-bezier(.2,.8,.3,1), bottom .9s cubic-bezier(.2,.8,.3,1), transform .9s; }
   #mascote canvas { display:block; filter:drop-shadow(0 0 10px rgba(255,22,79,.55)); }
   body.panel-open #mascote { top:auto; bottom:64px; left:auto; right:14px; transform:none; animation:passo .5s ease-in-out infinite alternate; }
   @keyframes passo { from { transform:translateY(0) } to { transform:translateY(-3px) } }
-  #mascBubble { position:absolute; bottom:calc(100% + 4px); right:0; transform:none;
+  #mascBubble { position:absolute; top:50%; left:calc(100% + 8px); right:auto; transform:translateY(-50%);
                 background:#f4f4ee; color:#1a1c24; font:bold 9px Consolas; padding:3px 7px;
                 border-radius:6px; white-space:nowrap; }
-  #mascBubble::after { content:''; position:absolute; top:100%; right:16px; transform:none;
-                       border:4px solid transparent; border-top-color:#f4f4ee; }
-  body.panel-open #mascBubble { bottom:calc(100% + 6px); }
+  #mascBubble::after { content:''; position:absolute; top:50%; right:100%; left:auto; transform:translateY(-50%);
+                       border:5px solid transparent; border-right-color:#f4f4ee; }
+  body.panel-open #mascBubble { top:auto; bottom:calc(100% + 6px); left:50%; right:auto; transform:translateX(-50%); }
+  body.panel-open #mascBubble::after { top:100%; bottom:auto; right:auto; left:50%; transform:translateX(-50%); border:5px solid transparent; border-top-color:#f4f4ee; }
   #roster { position:fixed; left:0; right:0; bottom:0; z-index:7; display:flex; gap:5px; padding:3px 7px;
             overflow-x:auto; background:#0b0d13; border-top:1px solid #23262e; }
   .chip { flex:0 0 auto; padding:2px 7px; background:#151821; border:1px solid #2a2e3a; border-radius:10px;
