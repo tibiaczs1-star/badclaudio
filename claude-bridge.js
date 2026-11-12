@@ -1,8 +1,6 @@
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
-import os from 'os';
-import crypto from 'crypto';
 
 const PORT = Number(process.env.PORT || 20129);
 const CACHE_FILE = 'C:/Users/junio/.claude/thought_signatures.json';
@@ -159,12 +157,34 @@ function convertAnthropicMessagesToGemini(messages, system) {
   return contents;
 }
 
+// So origens locais podem chamar a ponte pelo navegador. Sem isso, qualquer
+// site aberto na mesma maquina poderia gastar os tokens do usuario.
+const ORIGENS_LOCAIS = new Set([
+  'http://127.0.0.1:3399', 'http://localhost:3399',
+  'http://127.0.0.1:20130', 'http://localhost:20130'
+]);
+function origensPermitidas(req) {
+  const origem = String(req.headers.origin || '');
+  if (!origem) return '';                       // sem Origin: chamada de CLI, nao de navegador
+  // aceita qualquer porta local (a sala pode subir em outra porta)
+  try {
+    const u = new URL(origem);
+    if (u.hostname === '127.0.0.1' || u.hostname === 'localhost') return origem;
+  } catch {}
+  return ORIGENS_LOCAIS.has(origem) ? origem : '';
+}
+
 const server = http.createServer(async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', '*');
+  const origemOk = origensPermitidas(req);
+  if (origemOk) {
+    res.setHeader('Access-Control-Allow-Origin', origemOk);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'content-type, anthropic-version, x-api-key, authorization');
+  }
 
   if (req.method === 'OPTIONS') {
+    if (!origemOk && req.headers.origin) { res.writeHead(403); res.end(); return; }
     res.writeHead(204);
     res.end();
     return;
@@ -198,7 +218,15 @@ const server = http.createServer(async (req, res) => {
 
   if (url.pathname === '/v1/messages' && req.method === 'POST') {
     let bodyText = '';
-    req.on('data', chunk => { bodyText += chunk; });
+    const LIMITE_CORPO = 8 * 1024 * 1024;
+    req.on('data', chunk => {
+      bodyText += chunk;
+      if (bodyText.length > LIMITE_CORPO) {
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: 'corpo grande demais', type: 'request_too_large' } }));
+        req.destroy();
+      }
+    });
     req.on('end', async () => {
       try {
         const payload = JSON.parse(bodyText);
@@ -537,47 +565,6 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
   console.error('[Bridge UnhandledRejection Handled]', reason && reason.message ? reason.message : reason);
 });
-
-
-// ===== PRESENÇA BADCLAUDE (heartbeat para a nuvem) =====
-// Inerte por padrão: só envia quando BADCLAUDE_CLOUD_URL está definido.
-// Sua cópia local NÃO entra na contagem da nuvem sem esta variável.
-const _CLOUD = String(process.env.BADCLAUDE_CLOUD_URL || '').replace(/\/+$/, '');
-const _PRES_TOKEN = process.env.BADCLAUDE_TOKEN || process.env.CONSUMO_TOKEN || 'badclaude-consumo';
-const _PRES_MS = Math.max(5000, Number(process.env.BADCLAUDE_HEARTBEAT_MS || 30000));
-let _presId = '';
-try {
-  _presId = 'INST-' + crypto.createHash('sha1')
-    .update(os.hostname() + '|' + os.userInfo().username + '|bridge')
-    .digest('hex').slice(0, 10).toUpperCase();
-} catch { _presId = 'INST-' + Math.random().toString(16).slice(2, 10); }
-
-async function enviarPresenca(extra = {}) {
-  if (!_CLOUD) return;
-  try {
-    await fetch(_CLOUD + '/badclaude/api/presenca/sinal', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-badclaude-token': _PRES_TOKEN },
-      body: JSON.stringify({
-        id: _presId,
-        tipo: 'cli',
-        canal: process.env.BADCLAUDE_CANAL || 'bridge',
-        nome: process.env.BADCLAUDE_USER || (() => { try { return os.userInfo().username; } catch { return 'cliente'; } })(),
-        maquina: (() => { try { return os.hostname(); } catch { return ''; } })(),
-        versao: '2.5.0',
-        estado: (stats && stats.lastServed) ? 'trabalhando' : 'ocioso',
-        chaves: NIGHTROUTER_KEYS.length,
-        modelos: CASCADE_POOL.length,
-        ...extra,
-      }),
-      signal: AbortSignal.timeout(5000),
-    });
-  } catch (e) { /* offline não é erro */ }
-}
-const _presTimer = setInterval(() => enviarPresenca(), _PRES_MS);
-if (_presTimer.unref) _presTimer.unref();
-enviarPresenca();
-// ===== fim da presença =====
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log('================================================================');

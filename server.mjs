@@ -85,7 +85,24 @@ economia é prometido sem confirmação no catálogo ativo.</p>
 </div></body></html>`;
 }
 
+// Cabecalhos de seguranca aplicados a todas as respostas.
+// A sala roda em canvas e SVG inline, por isso style-src 'unsafe-inline'.
+function cabecalhosSeguranca(req, res) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Content-Security-Policy',
+    "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; " +
+    "script-src 'self' 'unsafe-inline'; connect-src 'self'; font-src 'self' data:; " +
+    "object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+  if (String(req.headers['x-forwarded-proto'] || '').includes('https')) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+}
+
 const server = http.createServer((req, res) => {
+  cabecalhosSeguranca(req, res);
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const rel = url.pathname.replace(/^\/+/, '');
   if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405).end(); return; }

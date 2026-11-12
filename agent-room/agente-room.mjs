@@ -50,8 +50,20 @@ const server = http.createServer(async (req, res) => {
   // bolha inteligente: pergunta curta a IA da bridge (fallback local se cair)
   if (url.pathname === '/api/agent-chatter' && req.method === 'POST') {
     let body = '';
-    req.on('data', c => { body += c; });
+    let abortada = false;                      // evita responder 200 depois do 413
+    const LIMITE_CORPO = 64 * 1024;            // conversa do visitante: 64 KB bastam
+    req.on('data', c => {
+      if (abortada) return;
+      body += c;
+      if (body.length > LIMITE_CORPO) {
+        abortada = true;
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ line: 'mensagem grande demais', source: 'limit' }));
+        req.destroy();
+      }
+    });
     req.on('end', async () => {
+      if (abortada) return;
       let agent = 'agente', context = 'no escritorio';
       try { const b = JSON.parse(body); agent = String(b.agent || agent).slice(0, 40); context = String(b.context || context).slice(0, 120); } catch {}
       const prompt = `Voce e o agente "${agent}" do escritorio BadClaudio, acabou de ${context}. Responda em UMA frase curta (max 10 palavras), informal, em portugues.`;
@@ -101,6 +113,7 @@ const server = http.createServer(async (req, res) => {
     }
     return;
   }
+
 
   // assets de sprite da base 2D (PNG)
   if (url.pathname.startsWith('/assets/')) {
