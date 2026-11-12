@@ -107,16 +107,19 @@ function pad(s, n) {
   const limpo = String(s).replace(/\x1b\[[0-9;]*m/g, '');
   return String(s) + ' '.repeat(Math.max(0, n - limpo.length));
 }
+// colunas: │ + esp + esq + esp + │ + esp + dir + esp + │ = W
+// logo esq + dir + 5 = W
+const L_ESQ = 33;
+const L_DIR = W - L_ESQ - 7;
 function linha(esq, dir) {
-  const larguraEsq = 34, larguraDir = W - larguraEsq - 5;
-  return dim('│') + ' ' + pad(esq, larguraEsq) + dim('│') + ' ' + pad(dir, larguraDir) + dim('│');
+  return dim('│') + ' ' + pad(esq, L_ESQ) + ' ' + dim('│') + ' ' + pad(dir, L_DIR) + ' ' + dim('│');
 }
 function topo(titulo) {
   const t = ` ${titulo} `;
   const sobra = W - 2 - t.length;
   return dim('╔') + wht(bold(t)) + dim('═'.repeat(Math.max(0, sobra))) + dim('╗');
 }
-function meio() { return dim('╠' + '═'.repeat(34 + 1) + '╩' + '═'.repeat(W - 34 - 3) + '╣'); }
+function meio() { return dim('╠' + '═'.repeat(L_ESQ + 2) + '╩' + '═'.repeat(L_DIR + 2) + '╣'); }
 function base() { return dim('╚' + '═'.repeat(W - 2) + '╝'); }
 function barraStatus(extra) {
   const atual = MISSOES.camadas.filter(c => tokensTotal >= c.tokens).pop();
@@ -127,7 +130,13 @@ function barraStatus(extra) {
     yel(atual ? 'camada: ' + atual.nome : 'camada: nenhuma'),
     dim(proxima ? 'proxima: ' + proxima.missao : 'ultima camada')
   ];
-  return partes.join(dim('  │  '));
+  const texto = partes.join(dim('  │  '));
+  const limpo = texto.replace(/\[[0-9;]*m/g, '');
+  if (limpo.length <= W - 4) return texto + ' '.repeat((W - 4) - limpo.length);
+  // estreita: so ponte e tokens
+  const curto = grn('● ' + (extra && extra.online ? 'online' : 'local')) + dim('  │  ') + cyn(fmt(tokensTotal) + ' tokens');
+  const l2 = curto.replace(/\[[0-9;]*m/g, '');
+  return curto + ' '.repeat(Math.max(0, (W - 4) - l2.length));
 }
 
 function desenhar(status) {
