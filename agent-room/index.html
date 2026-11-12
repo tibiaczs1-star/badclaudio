@@ -19,7 +19,7 @@
   .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; background:#555; vertical-align:middle; }
   .dot.on { background:var(--ok); box-shadow:0 0 8px var(--ok); }
   #keysTxt { color:#8f96a4; }
-  #world { position:absolute; inset:86px 0 42px 0; overflow:hidden; transition:right .28s cubic-bezier(.2,.8,.3,1); }
+  #world { position:absolute; inset:96px 0 42px 0; overflow:hidden; transition:right .28s cubic-bezier(.2,.8,.3,1); }
   body.panel-open #world { right:min(86vw,320px); }
   canvas { display:block; width:100%; height:100%; image-rendering:pixelated; }
   /* painel = porta que abre para fora do quadro */
@@ -65,7 +65,7 @@
   .chip { flex:0 0 auto; padding:2px 7px; background:#151821; border:1px solid #2a2e3a; border-radius:10px;
           font-size:9.5px; white-space:nowrap; }
   .chip.out { border-color:#ff8a5c; color:#ffbf9d; }
-  #toast { position:fixed; right:8px; top:32px; max-width:70%; background:#12141a; border:1px solid var(--r);
+  #toast { position:fixed; left:8px; bottom:46px; max-width:70%; background:#12141a; border:1px solid var(--r);
            border-left:4px solid var(--r); padding:5px 8px; font-size:10px; opacity:0; transition:opacity .4s; z-index:9; }
 </style>
 </head>
@@ -262,7 +262,13 @@ const ACT = {
 const DEST = ['deploy em produção','manutenção do Canal #7','buscar tokens','reunião com o provedor',
   'auditar a cascata','ajustar latência','backup do gabinete','revisar logs'];
 
-function say(a, text, dur) { a.bubble = text; a.bubbleUntil = performance.now() + (dur || 4200); }
+let falaAtual = null;   // so uma fala na cena por vez, para nao empilhar baloes
+function say(a, text, dur) {
+  AGENTS.forEach(x => { if (x !== a) { x.bubble = null; x.bubbleUntil = 0; } });
+  a.bubble = text;
+  a.bubbleUntil = performance.now() + (dur || 4200);
+  falaAtual = a.name;
+}
 function goTo(a, x, y, state, target) { a.tx=x; a.ty=y; a.state=state; a.stateT=0; a.target=target||null; }
 function arrived(a) { return Math.hypot(a.tx-a.px, a.ty-a.py) < 3; }
 function backToDesk(a) { a.target=null; goTo(a, a.desk.x+a.desk.w/2, a.desk.y+a.desk.h+14, 'TO_WORK'); }
