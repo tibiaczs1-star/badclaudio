@@ -125,7 +125,7 @@ function barraStatus(extra) {
   const atual = MISSOES.camadas.filter(c => tokensTotal >= c.tokens).pop();
   const proxima = MISSOES.camadas.find(c => tokensTotal < c.tokens);
   const partes = [
-    grn('● ' + (extra && extra.online ? 'ponte online' : 'ponte local')),
+    grn('[ON] ' + (extra && extra.online ? 'ponte online' : 'ponte local')),
     cyn(fmt(tokensTotal) + ' tokens'),
     yel(atual ? 'camada: ' + atual.nome : 'camada: nenhuma'),
     dim(proxima ? 'proxima: ' + proxima.missao : 'ultima camada')
@@ -134,7 +134,7 @@ function barraStatus(extra) {
   const limpo = texto.replace(/\[[0-9;]*m/g, '');
   if (limpo.length <= W - 4) return texto + ' '.repeat((W - 4) - limpo.length);
   // estreita: so ponte e tokens
-  const curto = grn('● ' + (extra && extra.online ? 'online' : 'local')) + dim('  │  ') + cyn(fmt(tokensTotal) + ' tokens');
+  const curto = grn('[ON] ' + (extra && extra.online ? 'online' : 'local')) + dim('  │  ') + cyn(fmt(tokensTotal) + ' tokens');
   const l2 = curto.replace(/\[[0-9;]*m/g, '');
   return curto + ' '.repeat(Math.max(0, (W - 4) - l2.length));
 }
@@ -153,7 +153,7 @@ function desenhar(status) {
     linhas.push(linha(esq, dir));
   }
   linhas.push(linha('', ''));
-  linhas.push(dim('│') + ' ' + pad(mag(fala.length > 32 ? fala.slice(0, 31) + '…' : fala), W - 4) + ' ' + dim('│'));
+  linhas.push(dim('│') + ' ' + pad(mag(fala.length > 32 ? fala.slice(0, 30) + '...' : fala), W - 4) + ' ' + dim('│'));
   linhas.push(meio());
   linhas.push(linha('', ''));
   linhas.push(dim('│') + ' ' + pad(barraStatus(status), W - 4) + ' ' + dim('│'));
