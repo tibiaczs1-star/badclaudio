@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /* ============================================================
-   BADCLAUDIO — INTERFACE NORMAL (CLI)  ·  visual "Modelo 1"
-   Terminal operacional: mascote na lateral esquerda, menu na
-   direita e painel de status separado. Layout montado 1 vez no
-   topo e redraw a cada turno, sem biblioteca grafica.
+   BADCLAUDIO — INTERFACE NORMAL (CLI)
+   Visual no padrao dos melhores CLIs de terminal: letreiro em
+   block letters com gradiente, mascote em arte de blocos a
+   esquerda e painel de informacoes a direita, tudo dentro de
+   uma moldura de largura fixa.
    ============================================================ */
 import readline from 'readline';
 import fs from 'fs';
@@ -21,15 +22,15 @@ const MISSOES_DEFAULT = {
     { tokens: 5000000, nome: 'Tentaculo Coder', missao: 'Corrigir e testar um codigo' },
     { tokens: 25000000, nome: 'Esquadrao Ativo', missao: 'Usar tres modos do BadClaudio' },
     { tokens: 100000000, nome: 'Chefe de Oficina', missao: 'Entregar um projeto completo' },
-    { tokens: 20000000000, nome: 'BadClaudio Supremo', missao: 'Atingir vinte bilhoes de tokens acumulados' }
+    { tokens: 20000000000, nome: 'BadClaudio Supremo', missao: 'Atingir vinte bilhoes de tokens' }
   ],
   girias: {
     normal: [
-      'Porra, ta gastando, hein, playboy! Pra comprar memoria, nada.',
+      'O BadClaudio trabalha e o cooler que lute.',
       'Se nao fosse eu, ja teria acabado a cota.',
-      'Vai atras de um cocota... mas salva o projeto antes!',
-      'Clica em mim, porra! Clica em mim, porra!',
-      'O BadClaudio trabalha e o cooler que lute.'
+      'Guardei o progresso. Voce guarda o cafe.',
+      'Missao dada e missao cumprida.',
+      'Codigo na tela e ideia na cabeca.'
     ],
     familia: [
       'Motor ligado. Bora trabalhar!',
@@ -40,7 +41,6 @@ const MISSOES_DEFAULT = {
   }
 };
 
-// ---------------- config e estado ----------------
 function carregarConfig() {
   let cfg = {};
   try { cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch {}
@@ -55,12 +55,11 @@ const cfg = carregarConfig();
 const MISSOES = carregarMissoes();
 const fmt = n => Number(n || 0).toLocaleString('pt-BR');
 
-let tokensTotal = 0, requisicoes = 0, primeiraVez = false;
+let tokensTotal = 0, requisicoes = 0;
 let DATA_PATH;
 function carregarHistoria() {
   fs.mkdirSync(cfg.history_dir, { recursive: true });
   DATA_PATH = path.join(cfg.history_dir, 'historico.json');
-  if (!fs.existsSync(DATA_PATH)) primeiraVez = true;
   try {
     const d = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8'));
     tokensTotal = d.tokens_total || 0;
@@ -76,90 +75,86 @@ function salvarHistoria(sessao) {
 }
 
 // ---------------- ANSI ----------------
-const useCor = process.stdout.isTTY !== false;
-const C = (code) => s => useCor ? `\x1b[${code}m${s}\x1b[0m` : String(s);
-const red = C('91'), cyn = C('96'), yel = C('93'), grn = C('92'), mag = C('95'),
-      dim = C('90'), wht = C('97'), bold = C('1');
+const usoCor = process.stdout.isTTY !== false;
+const cor = (n) => s => usoCor ? `\x1b[${n}m${s}\x1b[0m` : String(s);
+const R = cor('38;5;203'), RED = cor('38;5;196'), AMB = cor('38;5;214'),
+      CYN = cor('38;5;81'), WHT = cor('38;5;255'), DIM = cor('38;5;242'),
+      PNK = cor('38;5;211'), GRN = cor('38;5;114'), YEL = cor('38;5;221'),
+      BLD = cor('1');
+const GRAD = ['196','203','209','215','221','227'].map(n => usoCor ? `\x1b[38;5;${n}m` : '');
+const RST = usoCor ? '\x1b[0m' : '';
 
-// ---------------- layout ----------------
-const W = 78;
-const MASCOTE = [
-  '',
-  '        /\\_/\\',
-  '   ____/ o o \\____',
-  '  /  _    ^    _  \\',
-  ' |  / \\  BAD  / \\  |',
-  '  \\_\\  CLAUDIO  /_/',
-  '     \\_________/',
-  '',
-  ''
+// ---------------- arte ----------------
+const LOGO = [
+  '██████╗  █████╗ ██████╗  ██████╗██╗      █████╗ ██╗   ██╗██████╗ ██╗ ██████╗ ',
+  '██╔══██╗██╔══██╗██╔══██╗██╔════╝██║     ██╔══██╗██║   ██║██╔══██╗██║██╔═══██╗',
+  '██████╔╝███████║██║  ██║██║     ██║     ███████║██║   ██║██║  ██║██║██║   ██║',
+  '██╔══██╗██╔══██║██║  ██║██║     ██║     ██╔══██║██║   ██║██║  ██║██║██║   ██║',
+  '██████╔╝██║  ██║██████╔╝╚██████╗███████╗██║  ██║╚██████╔╝██████╔╝██║╚██████╔╝',
+  '╚═════╝ ╚═╝  ╚═╝╚═════╝  ╚═════╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚═╝ ╚═════╝ '
 ];
-const MENU = [
-  ['ENTER', 'descreva a tarefa'],
-  ['/dica', 'dica para iniciante'],
-  ['/stats', 'uso e endpoint'],
-  ['/limpar', 'comeca conversa nova'],
-  ['/titulo nome', 'renomeia a sessao'],
-  ['/sair', 'encerra e salva']
-];
+const W = 78;                 // largura total da moldura (inclui as bordas)
+const L_ESQ = 31;             // coluna do menu
+const L_DIR = W - L_ESQ - 6;  // coluna de informacoes
 
-function pad(s, n) {
-  const limpo = String(s).replace(/\x1b\[[0-9;]*m/g, '');
-  return String(s) + ' '.repeat(Math.max(0, n - limpo.length));
-}
-// colunas: │ + esp + esq + esp + │ + esp + dir + esp + │ = W
-// logo esq + dir + 5 = W
-const L_ESQ = 33;
-const L_DIR = W - L_ESQ - 7;
-function linha(esq, dir) {
-  return dim('│') + ' ' + pad(esq, L_ESQ) + ' ' + dim('│') + ' ' + pad(dir, L_DIR) + ' ' + dim('│');
-}
-function topo(titulo) {
-  const t = ` ${titulo} `;
-  const sobra = W - 2 - t.length;
-  return dim('╔') + wht(bold(t)) + dim('═'.repeat(Math.max(0, sobra))) + dim('╗');
-}
-function meio() { return dim('╠' + '═'.repeat(L_ESQ + 2) + '╩' + '═'.repeat(L_DIR + 2) + '╣'); }
-function base() { return dim('╚' + '═'.repeat(W - 2) + '╝'); }
-function barraStatus(extra) {
+const strip = s => String(s).replace(/\x1b\[[0-9;]*m/g, '');
+const pad = (s, n) => {
+  const t = strip(s);
+  return t.length >= n ? s : s + ' '.repeat(n - t.length);
+};
+const row = (esq, dir) => DIM('│') + ' ' + pad(esq, L_ESQ) + DIM('│') + ' ' + pad(dir, L_DIR) + ' ' + DIM('│');
+const full = (s) => DIM('│') + ' ' + pad(s, W - 4) + ' ' + DIM('│');
+const topo = (titulo) => {
+  const t = ' ' + titulo + ' ';
+  return DIM('╭') + WHT(BLD(t)) + DIM('─'.repeat(Math.max(0, W - 2 - strip(t).length))) + DIM('╮');
+};
+const base = () => DIM('╰' + '─'.repeat(W - 2) + '╯');
+
+
+function barraInfo(online) {
   const atual = MISSOES.camadas.filter(c => tokensTotal >= c.tokens).pop();
   const proxima = MISSOES.camadas.find(c => tokensTotal < c.tokens);
-  const partes = [
-    grn('[ON] ' + (extra && extra.online ? 'ponte online' : 'ponte local')),
-    cyn(fmt(tokensTotal) + ' tokens'),
-    yel(atual ? 'camada: ' + atual.nome : 'camada: nenhuma'),
-    dim(proxima ? 'proxima: ' + proxima.missao : 'ultima camada')
-  ];
-  const texto = partes.join(dim('  │  '));
-  const limpo = texto.replace(/\[[0-9;]*m/g, '');
-  if (limpo.length <= W - 4) return texto + ' '.repeat((W - 4) - limpo.length);
-  // estreita: so ponte e tokens
-  const curto = grn('[ON] ' + (extra && extra.online ? 'online' : 'local')) + dim('  │  ') + cyn(fmt(tokensTotal) + ' tokens');
-  const l2 = curto.replace(/\[[0-9;]*m/g, '');
-  return curto + ' '.repeat(Math.max(0, (W - 4) - l2.length));
+  return {
+    canal: GRN('● ') + WHT(online ? 'ponte online' : 'ponte local'),
+    tokens: CYN(fmt(tokensTotal) + ' tokens'),
+    camada: YEL(atual ? atual.nome : 'iniciante'),
+    proxima: DIM(proxima ? proxima.missao : 'avanco maximo')
+  };
 }
 
-function desenhar(status) {
+function desenhar(online) {
   const m = cfg.family_mode ? MISSOES.girias.familia : MISSOES.girias.normal;
   const fala = m[requisicoes % Math.max(1, m.length)];
-  const linhas = [];
-  linhas.push('');
-  linhas.push(topo('BADCLAUDIO  ·  INTERFACE NORMAL'));
-  for (let i = 0; i < Math.max(MASCOTE.length, MENU.length); i++) {
-    let esq = MASCOTE[i] !== undefined ? red(MASCOTE[i]) : '';
-    if (i === MASCOTE.length && i > 0) esq = '';
-    let dir = '';
-    if (MENU[i]) dir = cyn(pad(MENU[i][0], 13)) + dim(MENU[i][1]);
-    linhas.push(linha(esq, dir));
+  const info = barraInfo(online);
+  const L = [];
+  L.push('');
+  LOGO.forEach((l, i) => L.push(GRAD[i % GRAD.length] + l + RST));
+  L.push('');
+  const menu = [
+    CYN('ENTER') + '       ' + DIM('descreva a tarefa'),
+    CYN('/dica') + '       ' + DIM('dica de iniciante'),
+    CYN('/stats') + '      ' + DIM('uso e endpoint'),
+    CYN('/limpar') + '     ' + DIM('nova conversa'),
+    CYN('/sair') + '       ' + DIM('encerra e salva')
+  ];
+  const status = [
+    DIM('canal    ') + info.canal,
+    DIM('tokens   ') + info.tokens,
+    DIM('camada   ') + info.camada,
+    DIM('proxima  ') + info.proxima
+  ];
+  L.push(topo('CLI NORMAL'));
+  L.push(full(WHT(BLD('BADCLAUDIO')) + DIM('   escritorio de agentes')));
+  L.push(DIM('├' + '─'.repeat(W - 2) + '┤'));
+  for (let i = 0; i < Math.max(menu.length, status.length); i++) {
+    L.push(row(menu[i] || '', status[i] || ''));
   }
-  linhas.push(linha('', ''));
-  linhas.push(dim('│') + ' ' + pad(mag(fala.length > 32 ? fala.slice(0, 30) + '...' : fala), W - 4) + ' ' + dim('│'));
-  linhas.push(meio());
-  linhas.push(linha('', ''));
-  linhas.push(dim('│') + ' ' + pad(barraStatus(status), W - 4) + ' ' + dim('│'));
-  linhas.push('') ;
-  linhas.push(dim('  ' + (DATA_PATH || '') ));
-  console.log(linhas.join('\n'));
+  L.push(full(''));
+  L.push(full(PNK('"' + (fala.length > 40 ? fala.slice(0, 39) + '...' : fala) + '"')));
+  L.push(base());
+  L.push(DIM('  historico: ' + (DATA_PATH || '.claudio')));
+  L.push('');
+  console.log(L.join('\n'));
 }
 
 // ---------------- conexao ----------------
@@ -169,23 +164,23 @@ function baseUrl() {
   }
   return 'http://127.0.0.1:' + (process.env.BRIDGE_PORT || 20129);
 }
-const SYSTEM_PROMPT = `Voce e o BAD CLAUDE / Claudio, assistente CLI direto, bem-humorado e focado em resultado pratico.
+const SYSTEM = `Voce e o BAD CLAUDE / Claudio, assistente CLI direto, bem-humorado e focado em resultado pratico.
 Responda em portugues do Brasil, curto e objetivo. Voce tem filtros de seguranca e segue as regras dos provedores e da legislacao.
 Nao prometa modelos, gratuidades ou capacidades nao confirmadas. Quando algo nao der, avise curto e ofereca alternativa util.`;
 
-async function chatting(messages) {
+async function conversar(messages) {
   const res = await fetch(baseUrl() + '/v1/messages', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'anthropic-version': '2023-06-01' },
     body: JSON.stringify({
       model: cfg.model || 'claude-fable-5.1-free',
       max_tokens: Number(cfg.max_tokens || 2048),
-      system: SYSTEM_PROMPT,
+      system: SYSTEM,
       messages
     })
   });
   if (!res.ok) {
-    let d = ''; try { d = (await res.text()).slice(0, 180); } catch {}
+    let d = ''; try { d = (await res.text()).slice(0, 160); } catch {}
     throw new Error('HTTP ' + res.status + (d ? ' — ' + d : ''));
   }
   const data = await res.json();
@@ -200,11 +195,8 @@ async function garantirPonte() {
     if (r.ok) return true;
   } catch {}
   const { spawn } = await import('child_process');
-  const ponte = spawn(process.execPath, [path.join(__dirname, 'claude-bridge.js')], {
-    cwd: __dirname, stdio: ['ignore', 'pipe', 'pipe']
-  });
-  ponte.stdout.on('data', () => {});
-  ponte.stderr.on('data', () => {});
+  const p = spawn(process.execPath, [path.join(__dirname, 'claude-bridge.js')], { cwd: __dirname, stdio: ['ignore', 'pipe', 'pipe'] });
+  p.stdout.on('data', () => {}); p.stderr.on('data', () => {});
   for (let i = 0; i < 15; i++) {
     try {
       const r = await fetch(baseUrl() + '/health', { signal: AbortSignal.timeout(1000) });
@@ -218,52 +210,59 @@ async function garantirPonte() {
 // ---------------- execucao ----------------
 carregarHistoria();
 const online = await garantirPonte();
-console.clear?.();
-desenhar({ online });
-console.log(dim('  conversa nova · escreva o que precisa e ENTER\n'));
+if (process.stdout.isTTY) { try { process.stdout.write('\x1b[2J\x1b[H'); } catch {} }
+desenhar(online);
+console.log(DIM('  pronto. escreva a tarefa e de ENTER.') + '\n');
 
 const TIPS = [
   'Usa "cd pasta" para entrar na pasta do projeto.',
   'Usa "git status" antes de alterar o codigo.',
   'Usa "npm test" para conferir se nao quebrou nada.',
   'A seta para cima repete o ultimo comando.',
-  'Salva antes de fechar: o historico fica em ' + (DATA_PATH || '.claudio')
+  'O historico fica em ' + (DATA_PATH || '.claudio')
 ];
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 let conversa = [];
-let tituloSessao = 'Sessao ' + new Date().toISOString().slice(0, 10);
+let titulo = 'Sessao ' + new Date().toISOString().slice(0, 10);
+const prompt = () => { rl.setPrompt(GRN('claudio> ')); rl.prompt(); };
 
-function perguntar() { rl.setPrompt(grn('claudio> ')); rl.prompt(); }
 let fila = Promise.resolve();
-rl.on('line', l => { fila = fila.then(() => processar(l)).catch(() => perguntar()); });
-rl.on('close', () => { fila.then(() => { salvarHistoria({ titulo: tituloSessao, timestamp: new Date().toISOString(), tokens_sessao: tokensTotal, mensagens: conversa }); console.log('\n' + mag('É isso, velhinho! (historico salvo)')); process.exit(0); }); });
+rl.on('line', l => { fila = fila.then(() => processar(l)).catch(() => prompt()); });
+rl.on('close', () => {
+  fila.then(() => {
+    salvarHistoria({ titulo, timestamp: new Date().toISOString(), tokens_sessao: tokensTotal, mensagens: conversa });
+    console.log('\n' + PNK('  Encerrado. Historico salvo.') + '\n');
+    process.exit(0);
+  });
+});
 
-async function processar(line) {
-  const texto = line.trim();
-  if (!texto) return perguntar();
-  if (texto === '/sair') { rl.close(); return; }
-  if (texto === '/limpar') { conversa = []; console.log(dim('  conversa limpa.')); return perguntar(); }
-  if (texto === '/dica') { console.log(yel('  ' + TIPS[requisicoes % TIPS.length])); return perguntar(); }
-  if (texto === '/stats') {
-    console.log('  ' + barraStatus({ online }));
-    console.log(dim('  endpoint: ' + baseUrl() + ' · requisicoes: ' + requisicoes));
-    return perguntar();
+async function processar(linha) {
+  const t = linha.trim();
+  if (!t) return prompt();
+  if (t === '/sair') return rl.close();
+  if (t === '/limpar') { conversa = []; console.log(DIM('  conversa limpa.')); return prompt(); }
+  if (t === '/dica') { console.log(YEL('  ' + TIPS[requisicoes % TIPS.length])); return prompt(); }
+  if (t === '/stats') {
+    const i = barraInfo(online);
+    console.log('  ' + i.canal + DIM('  ·  ') + i.tokens + DIM('  ·  ') + i.camada);
+    console.log(DIM('  endpoint: ' + baseUrl() + '  ·  requisicoes: ' + requisicoes));
+    return prompt();
   }
-  if (texto.startsWith('/titulo ')) { tituloSessao = texto.slice(8).trim(); console.log(dim('  titulo: ' + tituloSessao)); return perguntar(); }
+  if (t.startsWith('/titulo ')) { titulo = t.slice(8).trim(); console.log(DIM('  titulo: ' + titulo)); return prompt(); }
 
-  conversa.push({ role: 'user', content: texto });
-  process.stdout.write(dim('  ...'));
+  conversa.push({ role: 'user', content: t });
+  process.stdout.write(DIM('  pensando...'));
   try {
-    const r = await chatting(conversa);
+    const r = await conversar(conversa);
     conversa.push({ role: 'assistant', content: r });
-    process.stdout.write('\r' + ' '.repeat(10) + '\r');
-    console.log('\n' + wht(r) + '\n');
+    process.stdout.write('\r' + ' '.repeat(14) + '\r');
+    console.log('\n' + WHT(r) + '\n');
   } catch (e) {
-    process.stdout.write('\r' + ' '.repeat(10) + '\r');
-    console.log(red('  nao deu: ' + e.message));
-    console.log(dim('  confere a ponte (chaves.json) ou o server_url do config.json\n'));
+    process.stdout.write('\r' + ' '.repeat(14) + '\r');
+    console.log(RED('  nao deu: ' + e.message));
+    console.log(DIM('  confere a ponte (chaves.json) ou o server_url do config.json') + '\n');
   }
-  perguntar();
+  prompt();
 }
-perguntar();
+prompt();

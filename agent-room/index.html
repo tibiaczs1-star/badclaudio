@@ -46,6 +46,19 @@
                     font:11px Consolas; padding:5px 7px; border-radius:3px; }
   #composer input:focus { outline:none; border-color:var(--r); }
   #composer button { background:var(--r); border:0; color:#fff; padding:0 11px; border-radius:3px; cursor:pointer; font-weight:700; }
+  #faixaMascote { position:fixed; left:0; right:0; top:26px; height:0; z-index:6; pointer-events:none; }
+  #mascote { position:fixed; top:30px; left:50%; transform:translateX(-50%); z-index:9;
+             cursor:pointer; transition:top .9s cubic-bezier(.2,.8,.3,1), left .9s cubic-bezier(.2,.8,.3,1),
+             right .9s cubic-bezier(.2,.8,.3,1), bottom .9s cubic-bezier(.2,.8,.3,1), transform .9s; }
+  #mascote canvas { display:block; filter:drop-shadow(0 0 10px rgba(255,22,79,.55)); }
+  body.panel-open #mascote { top:auto; bottom:64px; left:auto; right:14px; transform:none; animation:passo .5s ease-in-out infinite alternate; }
+  @keyframes passo { from { transform:translateY(0) } to { transform:translateY(-3px) } }
+  #mascBubble { position:absolute; bottom:calc(100% + 4px); right:0; transform:none;
+                background:#f4f4ee; color:#1a1c24; font:bold 9px Consolas; padding:3px 7px;
+                border-radius:6px; white-space:nowrap; }
+  #mascBubble::after { content:''; position:absolute; top:100%; right:16px; transform:none;
+                       border:4px solid transparent; border-top-color:#f4f4ee; }
+  body.panel-open #mascBubble { bottom:calc(100% + 6px); }
   #roster { position:fixed; left:0; right:0; bottom:0; z-index:7; display:flex; gap:5px; padding:3px 7px;
             overflow-x:auto; background:#0b0d13; border-top:1px solid #23262e; }
   .chip { flex:0 0 auto; padding:2px 7px; background:#151821; border:1px solid #2a2e3a; border-radius:10px;
@@ -74,6 +87,11 @@
   </div>
 </div>
 
+<div id="faixaMascote"></div>
+<div id="mascote" title="Clica em mim!">
+  <div id="mascBubble">Clica em mim!</div>
+  <canvas id="masc" width="46" height="50"></canvas>
+</div>
 <div id="roster"></div>
 <div id="toast"></div>
 <script>
@@ -258,6 +276,18 @@ const STUDY_SEATS = [
 const STUDY_TAKEN = {};
 let chessPlayers=[], damaPlayers=[], poolPlayers=[], dust=[];
 
+function trabalharNaMesa(a) {
+  const tarefas = ['fechando a tarefa do dia', 'revisando o código', 'rodando os testes',
+                   'ajustando o layout', 'corrigindo um bug', 'escrevendo a documentação'];
+  const t = tarefas[(Math.random()*tarefas.length)|0];
+  goTo(a, a.desk.x + a.desk.w/2, a.desk.y + a.desk.h + 14, 'TO_WORK');
+  a.emFoco = performance.now() + 7000;
+  dizerAgente(a.name, t);
+}
+function dizerAgente(nome, texto) {
+  const ag = AGENTS.find(x => x.name === nome);
+  if (ag) { say(ag, texto, 4500); logWrite('', nome, texto); }
+}
 function startDelivery(a) {
   a.carrying = true;
   goTo(a, BOSS.x-14, BOSS.y+16, 'TO_BOSS');
@@ -273,34 +303,35 @@ function startDelivery(a) {
 }
 function pickActivity(a) {
   const r = Math.random();
-  if (r < .10) return startDelivery(a);
-  if (r < .22) {
+  if (r < .34) return trabalharNaMesa(a);      // 34%: continua produzindo
+  if (r < .42) return startDelivery(a);
+  if (r < .52) {
     const i = SEATS.findIndex((s,k) => !SEAT_TAKEN['s'+k]);
     if (i >= 0) { SEAT_TAKEN['s'+i] = a.name; goTo(a, SEATS[i].x, SEATS[i].y, 'TO_SOFA'); say(a, 'descansando um pouco'); return; }
     return startDelivery(a);
   }
-  if (r < .34) {
+  if (r < .60) {
     const i = STUDY_SEATS.findIndex((s,k) => !STUDY_TAKEN['t'+k]);
     if (i >= 0) { STUDY_TAKEN['t'+i] = a.name; goTo(a, STUDY_SEATS[i].x, STUDY_SEATS[i].y, 'TO_STUDY'); say(a, 'estudando'); return; }
     return startDelivery(a);
   }
-  if (r < .44) { goTo(a, LUNCH.x+LUNCH.w/2, LUNCH.y+LUNCH.h+14, 'TO_EAT');  say(a, 'almoçando'); return; }
-  if (r < .52) { goTo(a, GYM.x+GYM.w/2, GYM.y+GYM.h+12, 'TO_GYM');           say(a, 'treinando'); return; }
-  if (r < .60) { goTo(a, MAT.x+MAT.w/2, MAT.y+MAT.h+12, 'TO_NAP');           say(a, 'tirando um cochilo'); return; }
-  if (r < .68 && dust.length) {
+  if (r < .66) { goTo(a, LUNCH.x+LUNCH.w/2, LUNCH.y+LUNCH.h+14, 'TO_EAT');  say(a, 'almoçando'); return; }
+  if (r < .71) { goTo(a, GYM.x+GYM.w/2, GYM.y+GYM.h+12, 'TO_GYM');           say(a, 'treinando'); return; }
+  if (r < .76) { goTo(a, MAT.x+MAT.w/2, MAT.y+MAT.h+12, 'TO_NAP');           say(a, 'tirando um cochilo'); return; }
+  if (r < .80 && dust.length) {
     const d = dust[(Math.random()*dust.length)|0];
     goTo(a, d.x, d.y+12, 'TO_CLEAN', d); say(a, 'limpando a bagunça'); return;
   }
-  if (r < .74) {
+  if (r < .84) {
     a.outDest = DEST[(Math.random()*DEST.length)|0];
     goTo(a, DOOR.x+DOOR.w/2, DOOR.y+30, 'TO_DOOR');
     logWrite('', a.name, 'saiu do escritório pra ' + a.outDest);
     say(a, 'saindo pra ' + a.outDest, 5000); return;
   }
-  if (r < .82) { goTo(a, CHESS.x+(a.idx%2?8:CHESS.w-8), CHESS.y+CHESS.h+12, 'TO_CHESS'); say(a, 'jogando xadrez'); return; }
-  if (r < .88) { goTo(a, DRAUGHT.x+(a.idx%2?8:DRAUGHT.w-8), DRAUGHT.y+DRAUGHT.h+12, 'TO_DRAUGHT'); say(a, 'jogando damas'); return; }
-  if (r < .93) { goTo(a, POOL.x+(a.idx%2?6:POOL.w-6), POOL.y+POOL.h+12, 'TO_POOL'); say(a, 'jogando sinuca'); return; }
-  if (r < .96) {
+  if (r < .89) { goTo(a, CHESS.x+(a.idx%2?8:CHESS.w-8), CHESS.y+CHESS.h+12, 'TO_CHESS'); say(a, 'jogando xadrez'); return; }
+  if (r < .93) { goTo(a, DRAUGHT.x+(a.idx%2?8:DRAUGHT.w-8), DRAUGHT.y+DRAUGHT.h+12, 'TO_DRAUGHT'); say(a, 'jogando damas'); return; }
+  if (r < .96) { goTo(a, POOL.x+(a.idx%2?6:POOL.w-6), POOL.y+POOL.h+12, 'TO_POOL'); say(a, 'jogando sinuca'); return; }
+  if (r < .98) {
     goTo(a, RING.x+(a.idx%2?10:RING.w-10), RING.y+RING.h+12, 'TO_WING');
     logWrite('', a.name, 'foi ao ringue treinar Wing Chun');
     say(a, 'treinando wing chun'); return;
@@ -337,7 +368,7 @@ function brain(a, t) {
         logWrite('', a.name, 'estava cansado e foi beber água');
         say(a, 'bebendo água'); return;
       }
-      if (t > a.next) { a.next = t + 11000 + Math.random()*11000; pickActivity(a); }
+      if (t > a.next) { a.next = t + 5000 + Math.random()*5000; pickActivity(a); }
       break;
     case 'TO_COOLER': if (arrived(a)) { a.state='COOLER'; a.stateT=0; } break;
     case 'COOLER': if (a.stateT > 2400) { a.energy = Math.min(100, a.energy+35); setEmotion(a,'😌'); backToDesk(a); } break;
@@ -494,11 +525,20 @@ function drawEvents(t) {
 }
 
 const RIDERS = [];
-function spawnRider() {
+const PEDIDOS = [
+  'o build do painel', 'o pedido do cliente #12', 'a atualização do catálogo',
+  'o relatório da ponte', 'a tarefa de CSS', 'o backup do gabinete',
+  'a correção do login', 'o teste do checkout', 'o ajuste do ranking'
+];
+let pedidoSeq = 0;
+function spawnRider(pedido) {
   if (RIDERS.length >= 3) return;
-  const cargo = ['pacote','token','relatório','código','backup'][(Math.random()*5)|0];
-  RIDERS.push({ x: SUBDOOR.x+14, y: 512, x0: SUBDOOR.x+14, target: 120+Math.random()*140, phase:'ida', t:0, cargo:cargo });
-  logWrite('', 'motoboy', 'saiu pela portinha levando ' + cargo);
+  const alvo = pedido || PEDIDOS[(Math.random()*PEDIDOS.length)|0];
+  pedidoSeq++;
+  const id = 'PED-' + String(pedidoSeq).padStart(3, '0');
+  RIDERS.push({ x: SUBDOOR.x+14, y: 512, x0: SUBDOOR.x+14, target: 120+Math.random()*140,
+                phase:'ida', t:0, pedido: alvo, id: id });
+  logWrite('', 'motoboy ' + id, 'saiu para buscar ' + alvo);
 }
 function riderStep(t) {
   if (Math.random() < .003 && RIDERS.length < 2) spawnRider();
@@ -509,7 +549,11 @@ function riderStep(t) {
       r.x += 1.15;
       if (r.x >= r.target) { r.phase = 'entrega'; r.t = 0; }
     } else if (r.phase === 'entrega') {
-      if (r.t > 1500) { r.phase = 'volta'; logWrite('', 'motoboy', 'entregou ' + r.cargo + ' e está voltando'); }
+      if (r.t > 1500) {
+        r.phase = 'volta';
+        logWrite('', 'motoboy ' + r.id, 'entregou ' + r.pedido + ' ao escritório, voltando');
+        dizerAgente('Infra', 'recebi ' + r.pedido + ' do subagente ' + r.id);
+      }
     } else {
       r.x -= 1.15;
       if (r.x <= r.x0) RIDERS.splice(i,1);
@@ -542,7 +586,7 @@ function drawRider(r, t) {
   ctx.fillStyle = '#1c2740'; ctx.fillRect(x-4, y-15, 8, 3);
   ctx.fillStyle = '#18dbff'; ctx.fillRect(x-4, y-15, 8, 1);
   ctx.fillStyle = '#0e1016'; ctx.fillRect(x+1, y-12, 2, 1);
-  const label = r.phase === 'entrega' ? 'entregando ' + r.cargo : r.phase === 'volta' ? 'voltando' : 'levando ' + r.cargo;
+  const label = r.phase === 'entrega' ? 'entregando ' + r.id : r.phase === 'volta' ? 'voltando' : 'buscando ' + r.id;
   ctx.font = 'bold 6px Consolas'; ctx.textAlign = 'center';
   const tw = Math.max(36, label.length*3.4+8);
   ctx.fillStyle = 'rgba(8,9,12,.8)'; ctx.fillRect(x-tw/2, y-27, tw, 11);
@@ -977,6 +1021,24 @@ function render(t) {
   drawRoster();
   requestAnimationFrame(render);
 }
+// mascote desenhado uma vez no proprio canvas, fora da cena
+(function desenharMascote() {
+  const c = document.getElementById('masc');
+  if (!c) return;
+  const g = c.getContext('2d');
+  g.fillStyle = '#1b1e27'; g.fillRect(4, 8, 38, 34);
+  g.fillStyle = '#252a36'; g.fillRect(6, 10, 34, 30);
+  g.fillStyle = '#e01b47'; g.fillRect(4, 11, 38, 6);            // bandana
+  g.fillRect(40, 12, 5, 3); g.fillStyle = '#ff2e5e'; g.fillRect(44, 14, 2, 4);
+  g.strokeStyle = '#ff3b30'; g.lineWidth = 2;                    // olho X
+  g.beginPath(); g.moveTo(13, 25); g.lineTo(21, 33); g.moveTo(21, 25); g.lineTo(13, 33); g.stroke();
+  g.fillStyle = '#18dbff'; g.beginPath(); g.arc(32, 29, 5, 0, Math.PI*2); g.fill();  // olho redondo
+  g.fillStyle = '#0a1016'; g.beginPath(); g.arc(32, 29, 2, 0, Math.PI*2); g.fill();
+  g.fillStyle = '#ff9f43'; g.fillRect(21, 37, 6, 2);             // boca
+  g.fillStyle = '#151821'; g.fillRect(9, 42, 6, 4); g.fillRect(32, 42, 6, 4); // pes
+})();
+document.getElementById('mascote').addEventListener('click', () => openPanel(true));
+
 logWrite('sys', null, 'escritório aberto — acompanhe aqui o que acontece');
 requestAnimationFrame(render);
 </script>
