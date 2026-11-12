@@ -105,6 +105,50 @@ const server = http.createServer((req, res) => {
   cabecalhosSeguranca(req, res);
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const rel = url.pathname.replace(/^\/+/, '');
+
+  // --- vitrine publica da sala: status e conversa, sem tocar na ponte do visitante ---
+  if (url.pathname === '/api/room-status') {
+    const t = Date.now();
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify({
+      online: true, demo: true, keys: 11, models: 17,
+      requests: 1000 + Math.floor((t / 60000) % 800),
+      lastServed: 'claude-fable-5.1-free via Canal #1',
+      server: 'vitrine-publica'
+    }));
+    return;
+  }
+  if (url.pathname === '/api/agent-chatter' && req.method === 'POST') {
+    let corpo = '', grande = false;
+    const LIMITE = 8 * 1024;
+    req.on('data', c => {
+      if (grande) return;
+      corpo += c;
+      if (corpo.length > LIMITE) {
+        grande = true;
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ line: 'mensagem grande demais', source: 'limit' }));
+        req.destroy();
+      }
+    });
+    req.on('end', () => {
+      if (grande) return;
+      let agente = 'agente';
+      try { agente = String(JSON.parse(corpo).agent || agente).slice(0, 40); } catch {}
+      // vitrine: respostas curtas prontas, sem custo de IA e sem prometer o que a demo nao faz
+      const falas = [
+        'Aqui e o ' + agente + '! Na versao completa eu respondo com IA de verdade.',
+        'Oi! No programa instalado eu converso muito mais.',
+        'Tudo certo por aqui. A sala real roda no seu PC.',
+        'Beleza! Baixe o pacote para conversar com a equipe de verdade.',
+        'Na demo eu so aceno. No seu computador a gente trabalha junto.'
+      ];
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({ line: falas[Math.floor(Math.random() * falas.length)], source: 'demo' }));
+    });
+    return;
+  }
+
   if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405).end(); return; }
 
   if (url.pathname === '/' || url.pathname === '/index.html') {
